@@ -1,0 +1,17 @@
+[
+  {"id": "d1", "topic": "derivative", "latex": "\\frac{d}{dx} x^{2} \\sin(x)", "expect_rules": ["product rule", "power rule"]},
+  {"id": "d2", "topic": "derivative", "latex": "\\frac{d}{dx} \\frac{e^{3x}}{x^2+1}", "expect_rules": ["quotient rule", "chain rule with exp"]},
+  {"id": "d3", "topic": "derivative", "latex": "\\frac{d}{dx} \\ln(\\cos(x^2))", "expect_rules": ["chain rule with log", "chain rule with cos"]},
+  {"id": "d4", "topic": "derivative", "latex": "\\frac{d}{dx} 3\\tan(2x)", "expect_rules": ["chain rule with tan"]},
+  {"id": "d5", "topic": "derivative", "latex": "\\frac{d}{dx} x^x", "expect_rules": ["logarithmic differentiation"]},
+  {"id": "i1", "topic": "integral", "latex": "\\int x e^{x} \\, dx", "expect_rules": ["integration by parts"]},
+  {"id": "i2", "topic": "integral", "latex": "\\int_{0}^{1} 2x\\cos(x^2)\\,dx", "expect_rules": ["u-substitution", "fundamental theorem of calculus"]},
+  {"id": "i3", "topic": "integral", "latex": "\\int \\frac{1}{x^2-1} dx", "expect_rules": ["partial fractions"]},
+  {"id": "i4", "topic": "integral", "latex": "\\int \\sin(x)\\cos(x) dx", "expect_rules": ["u-substitution"]},
+  {"id": "i5", "topic": "integral", "latex": "\\int x^2 \\ln(x) dx", "expect_rules": ["integration by parts"]},
+  {"id": "s1", "topic": "series", "latex": "\\sum_{n=1}^{\\infty} \\frac{1}{n^2}", "expect_verdict": "converges"},
+  {"id": "s2", "topic": "series", "latex": "\\sum_{n=1}^{\\infty} \\frac{1}{\\sqrt{n}}", "expect_verdict": "diverges"},
+  {"id": "s3", "topic": "series", "latex": "\\sum_{n=0}^{\\infty} \\left(\\frac{1}{2}\\right)^n", "expect_verdict": "converges"},
+  {"id": "s4", "topic": "series", "latex": "\\sum_{n=1}^{\\infty} \\frac{2^n}{n!}", "expect_verdict": "converges"},
+  {"id": "s5", "topic": "series", "latex": "\\sum_{n=1}^{\\infty} \\frac{(-1)^n}{n}", "expect_verdict": "converges"}
+]
