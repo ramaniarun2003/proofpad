@@ -17,6 +17,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Backend on the demo LAN. Override per machine in local.properties:
         //   BACKEND_URL=http://192.168.1.42:8000/
         val backendUrl = project.findProperty("BACKEND_URL") as String? ?: "http://10.0.2.2:8000/"
@@ -80,4 +81,6 @@ dependencies {
     implementation(libs.androidx.exifinterface)
 
     testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
