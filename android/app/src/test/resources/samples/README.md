@@ -17,7 +17,8 @@ the exact JPEG the app would upload. Eyeball the pairs side by side.
 OpenCV resolves here as an Android `.aar` (native libs are Android `.so` only),
 so the pipeline can't run in a plain JVM unit test. The harness is therefore an
 instrumented test (`app/src/androidTest/.../image/PreprocessorSampleTest.kt`)
-that runs on the phone; the script pushes these images to the app's external
-files dir, runs the test, and pulls the `_pre.jpg` results back here.
+that runs on the phone. The script stages these images into the test APK's
+assets (adb-pushed files under `Android/data/<pkg>` aren't reliably readable by
+the app), runs the test, and pulls the `_pre.jpg` results back here.
 
 Photos and `_pre.jpg` outputs are git-ignored (see `.gitignore`).
