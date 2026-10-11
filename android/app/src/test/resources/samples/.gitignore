@@ -1,0 +1,6 @@
+# Drop 5–10 handwritten-page JPEGs here; they are the inputs for the
+# Preprocessor debug harness (see scripts/preprocess_samples.sh).
+# Keep the photos and generated *_pre.jpg out of git.
+*
+!.gitignore
+!README.md

@@ -43,6 +43,11 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit) {
         Text("Review recognition", style = MaterialTheme.typography.headlineSmall)
 
         state.imageFile?.let {
+            Text(
+                "Preprocessed — exactly what was sent to the recognizer",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             AsyncImage(model = it, contentDescription = "Preprocessed page", modifier = Modifier.fillMaxWidth().height(180.dp), contentScale = ContentScale.Fit)
         }
 
