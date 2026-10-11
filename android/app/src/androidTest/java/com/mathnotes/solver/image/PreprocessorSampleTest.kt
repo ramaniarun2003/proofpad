@@ -16,14 +16,12 @@ import java.io.File
  * pipeline cannot run in a plain JVM unit test — this is an instrumented test that
  * runs on a connected device/emulator with the real OpenCV + Android Bitmap/EXIF.
  *
- * Flow (see scripts/preprocess_samples.sh, which wraps all of this):
- *   1. push your JPEGs to the app's external files dir, subfolder "samples/"
- *      (staged on the laptop in app/src/test/resources/samples/)
- *   2. run this test:  ./gradlew :app:connectedDebugAndroidTest
- *   3. pull "<name>_pre.jpg" back next to each input and eyeball them.
- *
- * It logs the output dimensions and file size for each sample and asserts the
- * ~500 KB upload budget from docs/api.md (413 over 2 MB) is respected.
+ * Inputs are read from the test APK's assets under "samples" (files pushed into
+ * the app's external dir via adb aren't reliably readable by the app itself), and
+ * outputs are written to the app's external files dir, which pulls back cleanly.
+ * scripts/preprocess_samples.sh wires all of this together: it stages the JPEGs
+ * from app/src/test/resources/samples into the test APK assets, builds, installs,
+ * runs this test, and pulls each "<name>_pre.jpg" back next to its input.
  */
 @RunWith(AndroidJUnit4::class)
 class PreprocessorSampleTest {
@@ -33,38 +31,42 @@ class PreprocessorSampleTest {
 
     @Test
     fun preprocessSamples() {
-        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        val dir = File(ctx.getExternalFilesDir(null), "samples")
-        if (!dir.isDirectory) {
-            Log.w(tag, "No samples dir at ${dir.absolutePath}. Push JPEGs there first (see scripts/preprocess_samples.sh).")
-        }
-        val inputs = dir.listFiles { f ->
-            f.isFile &&
-                f.extension.lowercase() in setOf("jpg", "jpeg", "png") &&
-                !f.nameWithoutExtension.endsWith("_pre")
-        }?.sortedBy { it.name } ?: emptyList()
+        val inst = InstrumentationRegistry.getInstrumentation()
+        val testAssets = inst.context.assets          // test APK assets (the inputs)
+        val ctx = inst.targetContext                  // app under test (OpenCV + filesDir)
+
+        val names = (testAssets.list("samples") ?: emptyArray())
+            .filter { it.substringAfterLast('.').lowercase() in setOf("jpg", "jpeg", "png") }
+            .filter { !it.substringBeforeLast('.').endsWith("_pre") }
+            .sorted()
 
         assertTrue(
-            "No sample images in ${dir.absolutePath} — push 5–10 handwritten-page JPEGs there first.",
-            inputs.isNotEmpty(),
+            "No sample images packaged in the test APK — drop JPEGs in " +
+                "app/src/test/resources/samples/ and run scripts/preprocess_samples.sh.",
+            names.isNotEmpty(),
         )
 
+        val outDir = File(ctx.getExternalFilesDir(null), "samples").apply { mkdirs() }
         val oversized = mutableListOf<String>()
-        for (img in inputs) {
+        for (name in names) {
+            val input = File(ctx.cacheDir, name)
+            testAssets.open("samples/$name").use { i -> input.outputStream().use { o -> i.copyTo(o) } }
+
             val t0 = System.currentTimeMillis()
-            val result = Preprocessor.process(ctx, img)
+            val result = Preprocessor.process(ctx, input)
             val ms = System.currentTimeMillis() - t0
-            val dest = File(dir, img.nameWithoutExtension + "_pre.jpg")
+
+            val dest = File(outDir, input.nameWithoutExtension + "_pre.jpg")
             result.copyTo(dest, overwrite = true)
 
             val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(dest.absolutePath, opts)
             val kb = dest.length() / 1024
-            Log.i(tag, "${img.name} -> ${dest.name}: ${opts.outWidth}x${opts.outHeight}, ${kb} KB, ${ms} ms")
+            Log.i(tag, "$name -> ${dest.name}: ${opts.outWidth}x${opts.outHeight}, ${kb} KB, ${ms} ms")
             if (dest.length() > maxBytes) oversized += "${dest.name} (${kb} KB)"
         }
 
-        Log.i(tag, "Processed ${inputs.size} sample(s). Pull them with: adb pull ${dir.absolutePath}")
+        Log.i(tag, "Processed ${names.size} sample(s) -> ${outDir.absolutePath}")
         assertTrue("Output(s) exceed ~500 KB budget: $oversized", oversized.isEmpty())
     }
 }

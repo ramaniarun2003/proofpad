@@ -1,0 +1,4 @@
+# Auto-populated by scripts/preprocess_samples.sh from
+# app/src/test/resources/samples/. Keep the staged photos out of git.
+*
+!.gitignore

@@ -4,21 +4,31 @@
 # back to the laptop so they can be eyeballed without poking at the phone.
 #
 # OpenCV is an Android .aar here, so the pipeline runs on-device via the
-# instrumented test PreprocessorSampleTest. This script:
-#   1. installs the debug app (creates its external files dir),
-#   2. pushes app/src/test/resources/samples/*.jpg to that dir,
-#   3. runs the instrumented test (writes <name>_pre.jpg on-device),
-#   4. pulls the whole samples dir back, so <name>_pre.jpg lands next to <name>.jpg.
+# instrumented test PreprocessorSampleTest. Inputs ride into the test APK as
+# assets (adb-pushed files in Android/data aren't reliably readable by the app);
+# outputs go to the app's external files dir, which pulls back cleanly.
+#
+# This script:
+#   1. syncs app/src/test/resources/samples/*.{jpg,jpeg,png} -> src/androidTest/assets/samples/
+#   2. builds + installs the app and test APKs,
+#   3. runs the test with `am instrument` (not connectedDebugAndroidTest, which
+#      reinstalls/cleans and would wipe device state mid-run),
+#   4. pulls the results so <name>_pre.jpg lands next to each <name>.jpg.
 #
 # Usage:  cd android && scripts/preprocess_samples.sh
 set -euo pipefail
 
-cd "$(dirname "$0")/.."                      # android/
+cd "$(dirname "$0")/.."                       # android/
 APP_ID="com.mathnotes.solver"
+TEST_ID="$APP_ID.test"
+RUNNER="androidx.test.runner.AndroidJUnitRunner"
+TEST_CLASS="com.mathnotes.solver.image.PreprocessorSampleTest"
 LOCAL_SAMPLES="app/src/test/resources/samples"
-DEVICE_SAMPLES="/sdcard/Android/data/$APP_ID/files/samples"
+ASSET_SAMPLES="app/src/androidTest/assets/samples"
+DEVICE_OUT="/sdcard/Android/data/$APP_ID/files/samples"
+APP_APK="app/build/outputs/apk/debug/app-debug.apk"
+TEST_APK="app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 
-# Find adb: PATH, then the SDK location in local.properties, then the default.
 ADB="$(command -v adb || true)"
 if [ -z "$ADB" ]; then
   SDK="$(grep -s '^sdk.dir=' local.properties | cut -d= -f2- || true)"
@@ -32,27 +42,33 @@ if [ "$("$ADB" get-state 2>/dev/null || true)" != "device" ]; then
   exit 1
 fi
 
+# 1. Sync real inputs (skip generated *_pre.*) into the test APK's assets.
 shopt -s nullglob
 imgs=("$LOCAL_SAMPLES"/*.jpg "$LOCAL_SAMPLES"/*.jpeg "$LOCAL_SAMPLES"/*.png)
-# Drop any previously generated *_pre.* so we only push real inputs.
 inputs=()
 for f in "${imgs[@]}"; do
   case "$f" in *_pre.jpg|*_pre.jpeg|*_pre.png) ;; *) inputs+=("$f") ;; esac
 done
 [ ${#inputs[@]} -gt 0 ] || { echo "No input images in $LOCAL_SAMPLES (drop some JPEGs there first)." >&2; exit 1; }
+mkdir -p "$ASSET_SAMPLES"
+find "$ASSET_SAMPLES" -type f ! -name '.gitignore' -delete   # clear stale inputs, keep .gitignore
+for f in "${inputs[@]}"; do cp "$f" "$ASSET_SAMPLES/"; done
+echo "==> Staged ${#inputs[@]} image(s) into the test APK assets"
 
-echo "==> Installing debug app"
-./gradlew -q :app:installDebug
+echo "==> Building app + instrumented-test APKs"
+./gradlew -q :app:assembleDebug :app:assembleDebugAndroidTest
 
-echo "==> Pushing ${#inputs[@]} image(s) to $DEVICE_SAMPLES"
-"$ADB" shell rm -rf "$DEVICE_SAMPLES" 2>/dev/null || true
-"$ADB" shell mkdir -p "$DEVICE_SAMPLES"
-for f in "${inputs[@]}"; do "$ADB" push "$f" "$DEVICE_SAMPLES/" >/dev/null; done
+echo "==> Installing both APKs"
+"$ADB" install -r -g "$APP_APK" >/dev/null
+"$ADB" install -r "$TEST_APK" >/dev/null
+"$ADB" shell rm -rf "$DEVICE_OUT" 2>/dev/null || true
 
-echo "==> Running PreprocessorSampleTest (logs dimensions + KB per sample)"
-./gradlew :app:connectedDebugAndroidTest \
-  -Pandroid.testInstrumentationRunnerArguments.class=com.mathnotes.solver.image.PreprocessorSampleTest
+echo "==> Running $TEST_CLASS (logs dimensions + KB per sample under tag PreprocSamples)"
+"$ADB" shell am instrument -w -r -e class "$TEST_CLASS" "$TEST_ID/$RUNNER" | tee /tmp/proofpad_instrument.txt
+if ! grep -qE "OK \(|Failures: 0" /tmp/proofpad_instrument.txt; then
+  echo "WARNING: test reported a failure — see output above and 'adb logcat -s PreprocSamples'." >&2
+fi
 
 echo "==> Pulling results back to $LOCAL_SAMPLES"
-"$ADB" pull "$DEVICE_SAMPLES/." "$LOCAL_SAMPLES" >/dev/null
+"$ADB" pull "$DEVICE_OUT/." "$LOCAL_SAMPLES" >/dev/null 2>&1 || true
 echo "Done. Compare each foo.jpg with its foo_pre.jpg in $LOCAL_SAMPLES/"
