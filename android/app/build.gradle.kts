@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -18,9 +19,18 @@ android {
         versionCode = 1
         versionName = "0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // Backend on the demo LAN. Override per machine in local.properties:
-        //   BACKEND_URL=http://192.168.1.42:8000/
-        val backendUrl = project.findProperty("BACKEND_URL") as String? ?: "http://10.0.2.2:8000/"
+        // Backend on the demo LAN. Override per machine, in precedence order:
+        //   1. -PBACKEND_URL=http://host:8000/ on the Gradle command line
+        //   2. BACKEND_URL=http://192.168.1.42:8000/ in local.properties (not committed)
+        //   3. the emulator default below
+        // (local.properties is not a Gradle property source, so read it explicitly.)
+        val localProps = Properties().apply {
+            val f = rootProject.file("local.properties")
+            if (f.exists()) f.inputStream().use { load(it) }
+        }
+        val backendUrl = (project.findProperty("BACKEND_URL") as String?)
+            ?: localProps.getProperty("BACKEND_URL")
+            ?: "http://10.0.2.2:8000/"
         buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
     }
 
