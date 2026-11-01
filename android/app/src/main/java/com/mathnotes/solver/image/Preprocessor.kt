@@ -82,9 +82,11 @@ object Preprocessor {
 
     private fun resolveRect(crop: CropSpec?, w: Int, h: Int): PixelRect = when (crop) {
         null -> PixelRect(0, 0, w, h)
+        // Defensive: if the preview was never measured, don't crop to a degenerate rect.
+        is CropSpec.GuideBox -> if (crop.viewWidth <= 0f || crop.viewHeight <= 0f) PixelRect(0, 0, w, h)
         // `upright` is already EXIF-rotated, so rotationDegrees = 0 here; the mapping's
         // rotation handling is exercised by CropMappingTest.
-        is CropSpec.GuideBox -> CropMapping.guideBoxToImageRect(
+        else CropMapping.guideBoxToImageRect(
             viewW = crop.viewWidth, viewH = crop.viewHeight,
             rawW = w, rawH = h, rotationDegrees = 0,
             guideLeftFrac = crop.leftFrac, guideTopFrac = crop.topFrac,
