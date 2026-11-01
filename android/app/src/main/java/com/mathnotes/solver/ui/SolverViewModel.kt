@@ -1,12 +1,14 @@
 package com.mathnotes.solver.ui
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mathnotes.solver.data.api.ApiClient
 import com.mathnotes.solver.data.api.SolveResponse
 import com.mathnotes.solver.data.db.SessionEntity
 import com.mathnotes.solver.data.repository.SolverRepository
+import com.mathnotes.solver.image.CropSpec
 import com.mathnotes.solver.image.Preprocessor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +38,7 @@ data class SolverUiState(
 
 class SolverViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = SolverRepository(app)
+    private val prefs = app.getSharedPreferences("solver_settings", Context.MODE_PRIVATE)
 
     private val _state = MutableStateFlow(SolverUiState())
     val state: StateFlow<SolverUiState> = _state
@@ -46,12 +49,24 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     fun setBackendUrl(url: String) { ApiClient.baseUrl = url }
     val backendUrl: String get() = ApiClient.baseUrl
 
+    /** Debug toggles exposed on the Settings screen; persisted so they survive restarts. */
+    var debugImages: Boolean
+        get() = prefs.getBoolean("debug_images", false)
+        set(v) { prefs.edit().putBoolean("debug_images", v).apply() }
+    var useAdaptiveThreshold: Boolean
+        get() = prefs.getBoolean("adaptive_threshold", false)
+        set(v) { prefs.edit().putBoolean("adaptive_threshold", v).apply() }
+
     /** Step 1–3 of the workflow: preprocess on device, upload, receive LaTeX. */
-    fun captureAndRecognize(raw: File) {
+    fun captureAndRecognize(raw: File, crop: CropSpec? = null) {
         _state.update { it.copy(busy = true, status = "Preprocessing…", error = null, result = null) }
+        val debug = debugImages
+        val threshold = useAdaptiveThreshold
         viewModelScope.launch {
             try {
-                val clean = withContext(Dispatchers.Default) { Preprocessor.process(getApplication(), raw) }
+                val clean = withContext(Dispatchers.Default) {
+                    Preprocessor.process(getApplication(), raw, crop, debug, threshold)
+                }
                 _state.update { it.copy(imageFile = clean, status = "Recognizing…") }
                 val rec = repo.recognize(clean)
                 _state.update {
@@ -66,6 +81,11 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    /** A gallery photo awaiting the adjustable-crop screen (no framing guide for picked images). */
+    var pendingGalleryFile: File? = null
+        private set
+    fun setPendingGallery(f: File) { pendingGalleryFile = f }
 
     /** The user edits the recognized LaTeX on the Review screen. */
     fun updateLatex(latex: String) = _state.update { it.copy(latex = latex) }

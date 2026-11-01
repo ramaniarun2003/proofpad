@@ -14,6 +14,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,7 +33,7 @@ import coil.compose.AsyncImage
  * LaTeX (editable) and its live typeset preview, the confidence, and the topic.
  */
 @Composable
-fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit) {
+fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit) {
     val state by vm.state.collectAsState()
     LaunchedEffect(state.result) { if (state.result != null) onSolved() }
 
@@ -44,11 +45,19 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit) {
 
         state.imageFile?.let {
             Text(
-                "Preprocessed — exactly what was sent to the recognizer",
+                "Preprocessed crop — exactly what was sent to the recognizer",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            AsyncImage(model = it, contentDescription = "Preprocessed page", modifier = Modifier.fillMaxWidth().height(180.dp), contentScale = ContentScale.Fit)
+            // Each capture writes a uniquely-named *_pre.jpg, so this is the post-crop
+            // file for this problem — exactly the bytes uploaded to /recognize.
+            AsyncImage(
+                model = it,
+                contentDescription = "Preprocessed crop",
+                modifier = Modifier.fillMaxWidth().height(180.dp),
+                contentScale = ContentScale.Fit,
+            )
+            OutlinedButton(onClick = onRetake, modifier = Modifier.fillMaxWidth()) { Text("Re-take") }
         }
 
         if (state.busy) {
