@@ -4,7 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -16,6 +15,7 @@ import com.mathnotes.solver.ui.ResultsScreen
 import com.mathnotes.solver.ui.ReviewScreen
 import com.mathnotes.solver.ui.SettingsScreen
 import com.mathnotes.solver.ui.SolverViewModel
+import com.mathnotes.solver.ui.theme.NotepadTheme
 
 /** Navigation: capture → review → results, plus history (cached sessions) and settings (backend URL). */
 class MainActivity : ComponentActivity() {
@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            NotepadTheme {
                 Surface {
                     val nav = rememberNavController()
                     NavHost(navController = nav, startDestination = "capture") {
