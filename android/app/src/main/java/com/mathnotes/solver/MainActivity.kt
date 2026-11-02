@@ -31,7 +31,10 @@ class MainActivity : ComponentActivity() {
                             CaptureScreen(vm, onCaptured = { nav.navigate("review") },
                                 onHistory = { nav.navigate("history") }, onSettings = { nav.navigate("settings") })
                         }
-                        composable("review") { ReviewScreen(vm, onSolved = { nav.navigate("results") }) }
+                        composable("review") {
+                            ReviewScreen(vm, onSolved = { nav.navigate("results") },
+                                onRetake = { nav.popBackStack("capture", inclusive = false) })
+                        }
                         composable("results") { ResultsScreen(vm, onNewProblem = { nav.popBackStack("capture", inclusive = false) }) }
                         composable("history") { HistoryScreen(vm, onOpen = { nav.navigate("results") }) }
                         composable("settings") { SettingsScreen(vm, onDone = { nav.popBackStack() }) }
