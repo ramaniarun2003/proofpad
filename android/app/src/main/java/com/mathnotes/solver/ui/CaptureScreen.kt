@@ -37,12 +37,22 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.mathnotes.solver.image.CropSpec
 import java.io.File
+
+/** Framing guide geometry, shared by the drawn box and the crop that follows it. */
+private const val GUIDE_LEFT = 0.05f
+private const val GUIDE_TOP = 0.325f
+private const val GUIDE_WIDTH = 0.90f
+private const val GUIDE_HEIGHT = 0.35f
+private const val GUIDE_MARGIN = 0.05f
 
 /**
  * Step 1 of the workflow: CameraX preview with a page-framing guide.
@@ -50,7 +60,13 @@ import java.io.File
  * saved photos, and the History button is the demo fallback.
  */
 @Composable
-fun CaptureScreen(vm: SolverViewModel, onCaptured: () -> Unit, onHistory: () -> Unit, onSettings: () -> Unit) {
+fun CaptureScreen(
+    vm: SolverViewModel,
+    onCaptured: () -> Unit,
+    onGalleryPicked: () -> Unit,
+    onHistory: () -> Unit,
+    onSettings: () -> Unit,
+) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
     val state by vm.state.collectAsState()
@@ -63,16 +79,20 @@ fun CaptureScreen(vm: SolverViewModel, onCaptured: () -> Unit, onHistory: () -> 
 
     val imageCapture = remember { ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY).build() }
 
+    // PreviewView pixel size, needed to map the guide box to image coordinates.
+    var previewSize by remember { mutableStateOf(IntSize.Zero) }
+
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
         val f = File(ctx.cacheDir, "picked_${System.currentTimeMillis()}.jpg")
         ctx.contentResolver.openInputStream(uri)?.use { input -> f.outputStream().use { input.copyTo(it) } }
-        vm.captureAndRecognize(f)
-        onCaptured()
+        // No framing guide for picked photos — send to the adjustable crop screen.
+        vm.setPendingGallery(f)
+        onGalleryPicked()
     }
 
     Column(Modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        Box(Modifier.weight(1f).fillMaxWidth().onSizeChanged { previewSize = it }) {
             if (hasPermission) {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
@@ -93,11 +113,11 @@ fun CaptureScreen(vm: SolverViewModel, onCaptured: () -> Unit, onHistory: () -> 
             }
             // Framing guide: keep one expression inside the box.
             Canvas(Modifier.fillMaxSize()) {
-                val w = size.width * 0.9f
-                val h = size.height * 0.35f
+                val w = size.width * GUIDE_WIDTH
+                val h = size.height * GUIDE_HEIGHT
                 drawRect(
                     color = Color(0xFF2A78D6),
-                    topLeft = Offset((size.width - w) / 2, (size.height - h) / 2),
+                    topLeft = Offset(size.width * GUIDE_LEFT, size.height * GUIDE_TOP),
                     size = Size(w, h),
                     style = Stroke(width = 6f),
                 )
@@ -121,7 +141,14 @@ fun CaptureScreen(vm: SolverViewModel, onCaptured: () -> Unit, onHistory: () -> 
                         ContextCompat.getMainExecutor(ctx),
                         object : ImageCapture.OnImageSavedCallback {
                             override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                                vm.captureAndRecognize(f); onCaptured()
+                                val crop = CropSpec.GuideBox(
+                                    viewWidth = previewSize.width.toFloat(),
+                                    viewHeight = previewSize.height.toFloat(),
+                                    leftFrac = GUIDE_LEFT, topFrac = GUIDE_TOP,
+                                    widthFrac = GUIDE_WIDTH, heightFrac = GUIDE_HEIGHT,
+                                    marginFrac = GUIDE_MARGIN,
+                                )
+                                vm.captureAndRecognize(f, crop); onCaptured()
                             }
                             override fun onError(exception: ImageCaptureException) { /* surface via snackbar */ }
                         },

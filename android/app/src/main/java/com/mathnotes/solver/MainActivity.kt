@@ -9,6 +9,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.mathnotes.solver.ui.CaptureScreen
+import com.mathnotes.solver.ui.GalleryCropScreen
 import com.mathnotes.solver.ui.HistoryScreen
 import com.mathnotes.solver.ui.ResultsScreen
 import com.mathnotes.solver.ui.ReviewScreen
@@ -29,7 +30,15 @@ class MainActivity : ComponentActivity() {
                     NavHost(navController = nav, startDestination = "capture") {
                         composable("capture") {
                             CaptureScreen(vm, onCaptured = { nav.navigate("review") },
+                                onGalleryPicked = { nav.navigate("galleryCrop") },
                                 onHistory = { nav.navigate("history") }, onSettings = { nav.navigate("settings") })
+                        }
+                        composable("galleryCrop") {
+                            GalleryCropScreen(
+                                vm,
+                                onCropped = { nav.navigate("review") { popUpTo("capture") } },
+                                onCancel = { nav.popBackStack("capture", inclusive = false) },
+                            )
                         }
                         composable("review") {
                             ReviewScreen(vm, onSolved = { nav.navigate("results") },
