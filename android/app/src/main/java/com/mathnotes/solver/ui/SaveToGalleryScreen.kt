@@ -338,7 +338,7 @@ private fun CheckBoxGlyph(checked: Boolean) {
 }
 
 @Composable
-private fun NewFolderDialog(onDismiss: () -> Unit, onCreate: (name: String, colorIndex: Int, term: String?) -> Unit) {
+internal fun NewFolderDialog(onDismiss: () -> Unit, onCreate: (name: String, colorIndex: Int, term: String?) -> Unit) {
     var name by remember { mutableStateOf("") }
     var term by remember { mutableStateOf("") }
     var color by remember { mutableStateOf(0) }

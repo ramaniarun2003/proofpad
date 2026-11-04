@@ -9,6 +9,7 @@ import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.data.db.FolderEntity
 import com.mathnotes.solver.data.db.FolderWithCount
 import com.mathnotes.solver.data.db.SessionEntity
+import com.mathnotes.solver.ui.GalleryHomeContent
 import com.mathnotes.solver.ui.HistoryContent
 import com.mathnotes.solver.ui.ResultsContent
 import com.mathnotes.solver.ui.SaveToGalleryContent
@@ -34,6 +35,7 @@ class ScreenshotActivity : ComponentActivity() {
                         "flagged" -> FlaggedSample()
                         "history" -> HistorySample()
                         "save" -> SaveSample()
+                        "gallery" -> GallerySample()
                         else -> VerifiedSample()
                     }
                 }
@@ -79,6 +81,37 @@ private fun VerifiedSample() {
         details = emptyList(),
         onExport = {},
         onNewProblem = {},
+    )
+}
+
+@androidx.compose.runtime.Composable
+private fun GallerySample() {
+    val now = System.currentTimeMillis()
+    val h = 3_600_000L
+    val day = 86_400_000L
+    val folders = listOf(
+        FolderWithCount(FolderEntity(id = 1, name = "Calc II", colorIndex = 0), 11),
+        FolderWithCount(FolderEntity(id = 2, name = "Diff Eq", colorIndex = 1), 7),
+        FolderWithCount(FolderEntity(id = 3, name = "Physics", colorIndex = 2), 5),
+    )
+    fun note(id: String, latex: String, folderId: Long, diff: Difficulty, verified: Boolean, mismatchAt: Int? = null, viewed: Long? = null, saved: Long? = null) =
+        SessionEntity(sessionId = id, recognizedLatex = latex, confirmedLatex = latex, topic = "integral",
+            verified = verified, mismatchAt = mismatchAt, folderId = folderId, difficulty = diff, savedAt = saved, lastViewedAt = viewed)
+    val recent = listOf(
+        note("r1", "\\int 2x \\, dx", 1, Difficulty.EASY, true, viewed = now - 2 * h, saved = now - 2 * h),
+        note("r2", "\\frac{d}{dx}[x^{2}\\sin x]", 1, Difficulty.MEDIUM, false, 1, viewed = now - 3 * h, saved = now - 3 * h),
+        note("r3", "y' + 2y = e^{x}", 2, Difficulty.HARD, true, viewed = now - day - h, saved = now - day),
+    )
+    val week = listOf(
+        note("w1", "\\int \\sin x \\cos x \\, dx", 1, Difficulty.MEDIUM, true, saved = now - day),
+        note("w2", "\\sum \\frac{(-1)^{n}}{n}", 1, Difficulty.MEDIUM, true, saved = now - 2 * day),
+        note("w3", "\\frac{d}{dx}\\ln(x^{2}+1)", 1, Difficulty.EASY, true, saved = now - 3 * day),
+        note("w4", "\\int x e^{x} \\, dx", 1, Difficulty.HARD, true, saved = now - 4 * day),
+    )
+    GalleryHomeContent(
+        totalNotes = 23, query = "", onQueryChange = {}, searchResults = emptyList(),
+        folders = folders, recentlyViewed = recent, savedThisWeek = week,
+        onCreateFolder = { _, _, _ -> }, onOpenFolder = {}, onOpenNote = {}, onSettings = {}, onSnap = {}, nowOverride = now,
     )
 }
 

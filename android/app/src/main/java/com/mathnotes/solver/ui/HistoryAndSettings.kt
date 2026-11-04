@@ -269,7 +269,7 @@ private fun metaLine(s: SessionEntity, stepCountOf: (SessionEntity) -> Int): Str
     return parts.joinToString(" · ")
 }
 
-private fun DrawScope.drawCamera(color: Color) {
+internal fun DrawScope.drawCamera(color: Color) {
     val s = size.minDimension
     val f = s / 24f
     val path = androidx.compose.ui.graphics.Path().apply {

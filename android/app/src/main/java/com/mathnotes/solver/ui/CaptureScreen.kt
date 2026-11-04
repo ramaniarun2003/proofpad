@@ -99,6 +99,7 @@ fun CaptureScreen(
     onCaptured: () -> Unit,
     onGalleryPicked: () -> Unit,
     onHistory: () -> Unit,
+    onGallery: () -> Unit,
     onSettings: () -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -213,6 +214,7 @@ fun CaptureScreen(
                     },
                     highlighted = torchOn,
                 ) { if (torchOn) drawFlashOn() else drawFlashOff() }
+                RoundIconButton(onClick = onGallery) { drawGrid() }
                 RoundIconButton(onClick = onHistory) { drawHistory() }
             }
         }
@@ -393,6 +395,19 @@ private fun DrawScope.drawFlashOff() {
 private fun DrawScope.drawFlashOn() {
     // Bolt without the slash, in ink so it reads on the yellow "on" highlight.
     poly(NotepadColors.Ink, listOf(13f to 2f, 4f to 14f, 11f to 14f, 10f to 22f, 19f to 10f, 12f to 10f, 13f to 2f), close = true)
+}
+
+private fun DrawScope.drawGrid() {
+    // 2×2 rounded squares = the notes gallery.
+    val c = NotepadColors.Paper
+    val s = size.minDimension
+    val d = s * 0.34f
+    val gap = s * 0.1f
+    val x0 = s * 0.14f
+    val r = androidx.compose.ui.geometry.CornerRadius(s * 0.05f, s * 0.05f)
+    listOf(x0 to x0, (x0 + d + gap) to x0, x0 to (x0 + d + gap), (x0 + d + gap) to (x0 + d + gap)).forEach { (x, y) ->
+        drawRoundRect(c, topLeft = Offset(x, y), size = androidx.compose.ui.geometry.Size(d, d), cornerRadius = r, style = Stroke(width = 2.dp.toPx()))
+    }
 }
 
 private fun DrawScope.drawHistory() {
