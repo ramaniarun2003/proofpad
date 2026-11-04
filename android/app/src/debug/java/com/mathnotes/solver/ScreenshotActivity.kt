@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.Surface
 import com.mathnotes.solver.data.api.Step
+import com.mathnotes.solver.data.db.SessionEntity
+import com.mathnotes.solver.ui.HistoryContent
 import com.mathnotes.solver.ui.ResultsContent
 import com.mathnotes.solver.ui.theme.NotepadColors
 import com.mathnotes.solver.ui.theme.NotepadTheme
@@ -20,15 +22,38 @@ import com.mathnotes.solver.ui.theme.NotepadTheme
 class ScreenshotActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val flagged = intent.getStringExtra("state") == "flagged"
+        val state = intent.getStringExtra("state")
         setContent {
             NotepadTheme {
                 Surface(color = NotepadColors.Paper) {
-                    if (flagged) FlaggedSample() else VerifiedSample()
+                    when (state) {
+                        "flagged" -> FlaggedSample()
+                        "history" -> HistorySample()
+                        else -> VerifiedSample()
+                    }
                 }
             }
         }
     }
+}
+
+@androidx.compose.runtime.Composable
+private fun HistorySample() {
+    val now = System.currentTimeMillis()
+    val day = 24L * 60 * 60 * 1000
+    val samples = listOf(
+        SessionEntity("h1", now - 60_000, null, "", 0.0, "\\int 2x \\, dx", "integral", "[]", "x^{2} + C", true, null),
+        SessionEntity("h2", now - 900_000, null, "", 0.0, "\\frac{d}{dx}[x^{2}\\sin x]", "derivative", "[]", "", false, 1),
+        SessionEntity("h3", now - day, null, "", 0.0, "\\frac{d}{dx}\\ln(x^{2}+1)", "derivative", "[]", "\\frac{2x}{x^{2}+1}", true, null),
+        SessionEntity("h4", now - day - 600_000, null, "", 0.0, "\\int \\sin x \\cos x \\, dx", "integral", "[]", "\\frac{\\sin^{2} x}{2} + C", true, null),
+        SessionEntity("h5", now - day - 1_200_000, null, "", 0.0, "\\sum \\frac{(-1)^{n}}{n}", "series", "[]", "converges", true, null),
+    )
+    val stepCounts = mapOf("h1" to 3, "h3" to 2, "h4" to 4)
+    HistoryContent(
+        history = samples,
+        stepCountOf = { stepCounts[it.sessionId] ?: 0 },
+        onOpen = {}, onSettings = {}, onSnap = {},
+    )
 }
 
 @androidx.compose.runtime.Composable

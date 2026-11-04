@@ -57,8 +57,12 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
         get() = prefs.getBoolean("adaptive_threshold", false)
         set(v) { prefs.edit().putBoolean("adaptive_threshold", v).apply() }
 
-    /** Step 1–3 of the workflow: preprocess on device, upload, receive LaTeX. */
-    fun captureAndRecognize(raw: File, crop: CropSpec? = null) {
+    /**
+     * Step 1–3 of the workflow: preprocess on device, upload, receive LaTeX.
+     * [topicHint] is the user's topic choice from the capture chips ("unknown" =
+     * Auto); when set, it overrides the recognizer's guess so Review and Solve use it.
+     */
+    fun captureAndRecognize(raw: File, crop: CropSpec? = null, topicHint: String = "unknown") {
         _state.update { it.copy(busy = true, status = "Preprocessing…", error = null, result = null) }
         val debug = debugImages
         val threshold = useAdaptiveThreshold
@@ -73,7 +77,8 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                     it.copy(
                         busy = false, status = "",
                         sessionId = rec.sessionId, latex = rec.latex,
-                        confidence = rec.confidence, lowConfidence = rec.lowConfidence, topic = rec.topicGuess,
+                        confidence = rec.confidence, lowConfidence = rec.lowConfidence,
+                        topic = if (topicHint != "unknown") topicHint else rec.topicGuess,
                     )
                 }
             } catch (e: Exception) {
@@ -86,6 +91,9 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     var pendingGalleryFile: File? = null
         private set
     fun setPendingGallery(f: File) { pendingGalleryFile = f }
+
+    /** Read-only: number of solution steps stored for a cached session (for History). */
+    fun stepCount(session: SessionEntity): Int = repo.stepsOf(session).size
 
     /** The user edits the recognized LaTeX on the Review screen. */
     fun updateLatex(latex: String) = _state.update { it.copy(latex = latex) }
