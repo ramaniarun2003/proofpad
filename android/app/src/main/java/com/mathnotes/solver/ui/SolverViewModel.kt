@@ -40,6 +40,14 @@ data class SolverUiState(
     val result: SolveResponse? = null,
 )
 
+/** Active filters for the folder-detail screen (folderId < 0 means "no folder open"). */
+data class FolderFilter(
+    val folderId: Long = -1,
+    val flaggedOnly: Boolean = false,
+    val topic: String? = null,
+    val difficulty: Difficulty? = null,
+)
+
 class SolverViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = SolverRepository(app)
     private val galleryRepo = GalleryRepository(app)
@@ -70,6 +78,25 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun setGalleryQuery(q: String) { _galleryQuery.value = q }
+
+    // --- Folder detail (filtered notes in one folder) ---
+    private val _folderFilter = MutableStateFlow(FolderFilter())
+    val folderFilter: StateFlow<FolderFilter> = _folderFilter
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val folderNotes: StateFlow<List<SessionEntity>> =
+        _folderFilter.flatMapLatest { f ->
+            if (f.folderId < 0) kotlinx.coroutines.flow.flowOf(emptyList())
+            else galleryRepo.notesInFolder(f.folderId, f.flaggedOnly, f.topic, f.difficulty)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Enter a folder (resets filters). */
+    fun openFolder(folderId: Long) { _folderFilter.value = FolderFilter(folderId = folderId) }
+    fun setFolderFlagged(on: Boolean) = _folderFilter.update { it.copy(flaggedOnly = on) }
+    fun setFolderTopic(topic: String?) = _folderFilter.update { it.copy(topic = topic) }
+    fun setFolderDifficulty(d: Difficulty?) = _folderFilter.update { it.copy(difficulty = d) }
+    fun renameFolder(id: Long, name: String) { viewModelScope.launch { galleryRepo.renameFolder(id, name) } }
+    fun deleteFolder(id: Long) { viewModelScope.launch { galleryRepo.deleteFolder(id) } }
 
     fun createFolder(name: String, colorIndex: Int, term: String? = null) {
         viewModelScope.launch { galleryRepo.createFolder(name, colorIndex, term) }
