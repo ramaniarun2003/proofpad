@@ -20,8 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -68,28 +66,8 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
     val state by vm.state.collectAsState()
     LaunchedEffect(state.result) { if (state.result != null) onSolved() }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text("Review recognition", style = MaterialTheme.typography.headlineSmall)
-
-        state.imageFile?.let {
-            Text(
-                "Preprocessed crop — exactly what was sent to the recognizer",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            // Each capture writes a uniquely-named *_pre.jpg, so this is the post-crop
-            // file for this problem — exactly the bytes uploaded to /recognize.
-            AsyncImage(
-                model = it,
-                contentDescription = "Preprocessed crop",
-                modifier = Modifier.fillMaxWidth().height(180.dp),
-                contentScale = ContentScale.Fit,
-            )
-            OutlinedButton(onClick = onRetake, modifier = Modifier.fillMaxWidth()) { Text("Re-take") }
-        }
+    Column(Modifier.fillMaxSize()) {
+        NotepadHeader(title = "Check my reading", trailing = "step 2 of 3")
 
         Column(
             Modifier
