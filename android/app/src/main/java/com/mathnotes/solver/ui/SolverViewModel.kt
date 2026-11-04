@@ -87,6 +87,9 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
         private set
     fun setPendingGallery(f: File) { pendingGalleryFile = f }
 
+    /** Read-only: number of solution steps stored for a cached session (for History). */
+    fun stepCount(session: SessionEntity): Int = repo.stepsOf(session).size
+
     /** The user edits the recognized LaTeX on the Review screen. */
     fun updateLatex(latex: String) = _state.update { it.copy(latex = latex) }
     fun updateTopic(topic: String) = _state.update { it.copy(topic = topic) }

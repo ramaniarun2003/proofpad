@@ -131,8 +131,9 @@ fun HandDrawnBox(modifier: Modifier = Modifier, dashed: Boolean = false, content
     ) { content() }
 }
 
+/** Green verification check — reused by [StepRow] and the History list. */
 @Composable
-private fun CheckIcon(color: Color, side: Dp = 26.dp) {
+fun CheckIcon(color: Color, side: Dp = 26.dp) {
     Canvas(Modifier.size(side)) {
         val w = size.width; val h = size.height
         val p = Path().apply {
@@ -142,8 +143,9 @@ private fun CheckIcon(color: Color, side: Dp = 26.dp) {
     }
 }
 
+/** Red mismatch cross — reused by [StepRow] and the History list. */
 @Composable
-private fun CrossIcon(color: Color, side: Dp = 26.dp) {
+fun CrossIcon(color: Color, side: Dp = 26.dp) {
     Canvas(Modifier.size(side)) {
         val w = size.width; val h = size.height
         val s = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)

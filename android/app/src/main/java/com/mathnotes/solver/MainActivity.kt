@@ -45,7 +45,12 @@ class MainActivity : ComponentActivity() {
                                 onRetake = { nav.popBackStack("capture", inclusive = false) })
                         }
                         composable("results") { ResultsScreen(vm, onNewProblem = { nav.popBackStack("capture", inclusive = false) }) }
-                        composable("history") { HistoryScreen(vm, onOpen = { nav.navigate("results") }) }
+                        composable("history") {
+                            HistoryScreen(vm,
+                                onOpen = { nav.navigate("results") },
+                                onSettings = { nav.navigate("settings") },
+                                onSnap = { nav.popBackStack("capture", inclusive = false) })
+                        }
                         composable("settings") { SettingsScreen(vm, onDone = { nav.popBackStack() }) }
                     }
                 }
