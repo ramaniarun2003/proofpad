@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -55,9 +56,29 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
         galleryRepo.folders.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val knownTags: StateFlow<List<String>> =
         galleryRepo.allTags.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val recentlyViewed: StateFlow<List<SessionEntity>> =
+        galleryRepo.recentlyViewed.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val savedThisWeek: StateFlow<List<SessionEntity>> =
+        galleryRepo.savedThisWeek().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _galleryQuery = MutableStateFlow("")
+    val galleryQuery: StateFlow<String> = _galleryQuery
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val searchResults: StateFlow<List<SessionEntity>> =
+        _galleryQuery.flatMapLatest { q ->
+            if (q.isBlank()) kotlinx.coroutines.flow.flowOf(emptyList()) else galleryRepo.search(q)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun setGalleryQuery(q: String) { _galleryQuery.value = q }
 
     fun createFolder(name: String, colorIndex: Int, term: String? = null) {
         viewModelScope.launch { galleryRepo.createFolder(name, colorIndex, term) }
+    }
+
+    /** Reopen a saved note in Results, marking it recently viewed. */
+    fun openNote(session: SessionEntity) {
+        openCached(session)
+        viewModelScope.launch { galleryRepo.touchViewed(session.sessionId) }
     }
 
     /** File the current solved note into the gallery, then invoke [onDone] on the main thread. */
