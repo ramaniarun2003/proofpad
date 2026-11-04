@@ -9,6 +9,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.mathnotes.solver.ui.CaptureScreen
+import com.mathnotes.solver.ui.FolderDetailScreen
 import com.mathnotes.solver.ui.GalleryCropScreen
 import com.mathnotes.solver.ui.GalleryHomeScreen
 import com.mathnotes.solver.ui.HistoryScreen
@@ -39,10 +40,16 @@ class MainActivity : ComponentActivity() {
                         }
                         composable("gallery") {
                             GalleryHomeScreen(vm,
-                                onOpenFolder = { /* folder detail — next screen (mockup 08) */ },
+                                onOpenFolder = { id -> vm.openFolder(id); nav.navigate("folderDetail") },
                                 onOpenNote = { nav.navigate("results") },
                                 onSettings = { nav.navigate("settings") },
                                 onSnap = { nav.popBackStack("capture", inclusive = false) })
+                        }
+                        composable("folderDetail") {
+                            FolderDetailScreen(vm,
+                                onBack = { nav.popBackStack() },
+                                onOpenNote = { nav.navigate("results") },
+                                onAddNote = { nav.popBackStack("capture", inclusive = false) })
                         }
                         composable("galleryCrop") {
                             GalleryCropScreen(

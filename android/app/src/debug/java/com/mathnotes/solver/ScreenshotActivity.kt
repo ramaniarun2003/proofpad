@@ -9,6 +9,7 @@ import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.data.db.FolderEntity
 import com.mathnotes.solver.data.db.FolderWithCount
 import com.mathnotes.solver.data.db.SessionEntity
+import com.mathnotes.solver.ui.FolderDetailContent
 import com.mathnotes.solver.ui.GalleryHomeContent
 import com.mathnotes.solver.ui.HistoryContent
 import com.mathnotes.solver.ui.ResultsContent
@@ -36,6 +37,7 @@ class ScreenshotActivity : ComponentActivity() {
                         "history" -> HistorySample()
                         "save" -> SaveSample()
                         "gallery" -> GallerySample()
+                        "folder" -> FolderSample()
                         else -> VerifiedSample()
                     }
                 }
@@ -82,6 +84,30 @@ private fun VerifiedSample() {
         difficulty = Difficulty.MEDIUM,
         onExport = {},
         onNewProblem = {},
+    )
+}
+
+@androidx.compose.runtime.Composable
+private fun FolderSample() {
+    val now = System.currentTimeMillis()
+    val day = 86_400_000L
+    fun n(id: String, latex: String, answer: String, verified: Boolean, mismatchAt: Int?, diff: Difficulty, tag: String, daysAgo: Int, topic: String = "integral") =
+        SessionEntity(sessionId = id, recognizedLatex = latex, confirmedLatex = latex, topic = topic,
+            answerLatex = answer, verified = verified, mismatchAt = mismatchAt, difficulty = diff,
+            tags = listOf(tag), savedAt = now - daysAgo * day, folderId = 1)
+    val notes = listOf(
+        n("1", "\\int 2x \\, dx", "x^{2} + C", true, null, Difficulty.EASY, "HW 7", 3),
+        n("2", "\\frac{d}{dx}[x^{2}\\sin x]", "", false, 1, Difficulty.EASY, "HW 7", 3, "derivative"),
+        n("3", "\\int \\sin x \\cos x \\, dx", "\\frac{\\sin^{2}x}{2} + C", true, null, Difficulty.MEDIUM, "HW 7", 4),
+        n("4", "\\sum \\frac{(-1)^{n}}{n}", "converges", true, null, Difficulty.MEDIUM, "Quiz prep", 6, "series"),
+        n("5", "\\int x e^{x} \\, dx", "(x-1)e^{x} + C", true, null, Difficulty.HARD, "Quiz prep", 7),
+    )
+    val counts = mapOf("1" to 3, "2" to 3, "3" to 4, "4" to 2, "5" to 2)
+    FolderDetailContent(
+        folderName = "Calc II", colorIndex = 0, term = "Fall 26", noteCount = 11, notes = notes,
+        flaggedOnly = false, topicFilter = null, difficultyFilter = null,
+        onToggleFlagged = {}, onTopic = {}, onDifficulty = {}, stepCountOf = { counts[it.sessionId] ?: 0 },
+        onBack = {}, onOpenNote = {}, onAddNote = {}, onRename = {}, onDelete = {},
     )
 }
 
