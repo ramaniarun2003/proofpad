@@ -38,6 +38,7 @@ data class SolverUiState(
     val lowConfidence: Boolean = false,
     val topic: String = "unknown",
     val result: SolveResponse? = null,
+    val difficulty: Difficulty? = null,
 )
 
 class SolverViewModel(app: Application) : AndroidViewModel(app) {
@@ -92,6 +93,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         val id = _state.value.sessionId
         if (id.isBlank()) { onDone(); return }
+        _state.update { it.copy(difficulty = difficulty) } // keep the Results stars in sync
         viewModelScope.launch {
             galleryRepo.saveToGallery(id, folderId, title?.ifBlank { null }, difficulty, tags, keepPhoto)
             onDone()
@@ -171,12 +173,21 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
             it.copy(
                 sessionId = session.sessionId, latex = session.confirmedLatex.ifEmpty { session.recognizedLatex },
                 topic = session.topic, imageFile = session.imagePath?.let(::File),
+                difficulty = session.difficulty,
                 result = SolveResponse(
                     sessionId = session.sessionId, topic = session.topic, steps = repo.stepsOf(session),
                     answerLatex = session.answerLatex, verified = session.verified ?: false, mismatchAt = session.mismatchAt,
                 ),
             )
         }
+    }
+
+    /** Set the current note's difficulty (from the Results stars); persists it on the session. */
+    fun setDifficulty(difficulty: Difficulty?) {
+        val sessionId = _state.value.sessionId
+        if (sessionId.isBlank()) return
+        _state.update { it.copy(difficulty = difficulty) }
+        viewModelScope.launch { repo.setDifficulty(sessionId, difficulty) }
     }
 
     fun reset() = _state.update { SolverUiState() }

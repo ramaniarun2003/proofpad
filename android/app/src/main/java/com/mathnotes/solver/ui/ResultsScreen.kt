@@ -3,6 +3,7 @@ package com.mathnotes.solver.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -34,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mathnotes.solver.data.api.Step
+import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.export.PdfExporter
 import com.mathnotes.solver.ui.components.HandDrawnBox
 import com.mathnotes.solver.ui.components.NotepadLabel
@@ -53,8 +56,11 @@ private val TRIVIAL_RULES = setOf(
     "constant rule", "identity", "sum rule",
 )
 
-private fun firstNonTrivial(steps: List<Step>): Int =
-    steps.indexOfFirst { it.rule !in TRIVIAL_RULES }.let { if (it < 0) 0 else it }
+private fun firstNonTrivial(steps: List<Step>): Int? {
+    if (steps.isEmpty()) return null
+    val idx = steps.indexOfFirst { it.rule !in TRIVIAL_RULES }
+    return if (idx < 0) 0 else idx
+}
 
 private fun sympyFn(topic: String): String = when (topic) {
     "integral" -> "integrate"
@@ -83,6 +89,8 @@ fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery
         verified = result.verified,
         mismatchAt = result.mismatchAt,
         details = result.details,
+        difficulty = state.difficulty,
+        onRate = vm::setDifficulty,
         onExport = { PdfExporter.exportAndShare(ctx, state) },
         onNewProblem = { vm.reset(); onNewProblem() },
         onSaveToGallery = onSaveToGallery,
@@ -99,6 +107,8 @@ fun ResultsContent(
     verified: Boolean,
     mismatchAt: Int?,
     details: List<String>,
+    difficulty: Difficulty? = null,
+    onRate: (Difficulty) -> Unit = {},
     onExport: () -> Unit,
     onNewProblem: () -> Unit,
     onSaveToGallery: (() -> Unit)? = null,
@@ -175,7 +185,7 @@ fun ResultsContent(
                 message = details.joinToString(" ").ifBlank { "Step $n doesn't match step ${n - 1}." },
                 resolveFromStep = n - 1,
             )
-        } else if (selected != null) {
+        } else if (selected != null && selected!! < steps.size) {
             val s = steps[selected!!]
             StickyNote(rotationDeg = 1.5f) {
                 Text("why step ${selected!! + 1}", fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp, color = NotepadColors.Muted)
@@ -217,6 +227,10 @@ fun ResultsContent(
                 }
             }
         }
+
+        Spacer(Modifier.height(16.dp))
+
+        DifficultyRatingRow(difficulty = difficulty, onRate = onRate)
 
         Spacer(Modifier.height(10.dp))
 
@@ -272,5 +286,43 @@ private fun NoteAction(label: String, filled: Boolean) {
             fontSize = 15.sp,
             color = if (filled) NotepadColors.StickyPink else NotepadColors.NoteInkPink,
         )
+    }
+}
+
+/**
+ * Difficulty stars — one widget, one data field. Backs the gallery [Difficulty]
+ * (EASY/MEDIUM/HARD → 1/2/3 stars) so Results and the Save sheet stay in sync.
+ */
+@Composable
+private fun DifficultyRatingRow(difficulty: Difficulty?, onRate: (Difficulty) -> Unit) {
+    val stars = when (difficulty) {
+        Difficulty.EASY -> 1; Difficulty.MEDIUM -> 2; Difficulty.HARD -> 3; null -> 0
+    }
+    val accent = when (difficulty) {
+        Difficulty.EASY -> NotepadColors.DifficultyEasy
+        Difficulty.MEDIUM -> NotepadColors.DifficultyMedium
+        Difficulty.HARD -> NotepadColors.DifficultyHard
+        null -> NotepadColors.Muted
+    }
+    val label = when (difficulty) {
+        Difficulty.EASY -> "Easy"; Difficulty.MEDIUM -> "Medium"; Difficulty.HARD -> "Hard"; null -> ""
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        NotepadLabel("How hard was it?", fontSize = 16)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            for (i in 1..3) {
+                val d = when (i) { 1 -> Difficulty.EASY; 2 -> Difficulty.MEDIUM; else -> Difficulty.HARD }
+                Text(
+                    text = if (i <= stars) "★" else "☆",
+                    fontSize = 32.sp,
+                    color = if (i <= stars) accent else Color(0xFFDCDCDC),
+                    modifier = Modifier.clickable { onRate(d) }.padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+            }
+            if (difficulty != null) {
+                Spacer(Modifier.width(8.dp))
+                Text("$label ($stars / 3)", fontFamily = NotepadFonts.PatrickHand, fontSize = 16.sp, color = NotepadColors.Muted)
+            }
+        }
     }
 }

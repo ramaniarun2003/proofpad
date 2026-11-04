@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,20 +35,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.data.db.SessionEntity
 import com.mathnotes.solver.ui.components.CheckIcon
 import com.mathnotes.solver.ui.components.CrossIcon
@@ -143,7 +145,7 @@ fun HistoryContent(
                 onClick = onSettings,
                 modifier = Modifier.weight(1f).height(48.dp),
                 shape = RoundedCornerShape(10.dp),
-                border = androidx.compose.foundation.BorderStroke(1.5.dp, NotepadColors.Ink),
+                border = BorderStroke(1.5.dp, NotepadColors.Ink),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
             ) { Text("Settings", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
 
@@ -176,12 +178,24 @@ private fun HistoryItem(s: SessionEntity, index: Int, stepCountOf: (SessionEntit
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            LatexView(mathLine(s), textSizePx = with(androidx.compose.ui.platform.LocalDensity.current) { 18.sp.toPx() })
-            Text(
-                metaLine(s, stepCountOf),
-                fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp,
-                color = if (s.verified == false) NotepadColors.Red else NotepadColors.Muted,
-            )
+            LatexView(mathLine(s), textSizePx = with(LocalDensity.current) { 18.sp.toPx() })
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    metaLine(s, stepCountOf),
+                    fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp,
+                    color = if (s.verified == false) NotepadColors.Red else NotepadColors.Muted,
+                )
+                s.difficulty?.let { d ->
+                    val stars = d.ordinal + 1
+                    val color = when (d) {
+                        Difficulty.EASY -> NotepadColors.DifficultyEasy
+                        Difficulty.MEDIUM -> NotepadColors.DifficultyMedium
+                        Difficulty.HARD -> NotepadColors.DifficultyHard
+                    }
+                    val label = when (d) { Difficulty.EASY -> "Easy"; Difficulty.MEDIUM -> "Medium"; Difficulty.HARD -> "Hard" }
+                    Text("★".repeat(stars) + " $label", color = color, fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp)
+                }
+            }
         }
         // Thumbnail card, pinned at a slight angle.
         Box(
@@ -272,7 +286,7 @@ private fun metaLine(s: SessionEntity, stepCountOf: (SessionEntity) -> Int): Str
 internal fun DrawScope.drawCamera(color: Color) {
     val s = size.minDimension
     val f = s / 24f
-    val path = androidx.compose.ui.graphics.Path().apply {
+    val path = Path().apply {
         moveTo(4f * f, 7f * f); lineTo(7f * f, 7f * f); lineTo(9f * f, 4f * f); lineTo(15f * f, 4f * f)
         lineTo(17f * f, 7f * f); lineTo(20f * f, 7f * f); lineTo(20f * f, 19f * f); lineTo(4f * f, 19f * f); close()
     }

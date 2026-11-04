@@ -75,6 +75,7 @@ fun SaveToGalleryScreen(vm: SolverViewModel, onDone: () -> Unit) {
                 onDone()
             }
         },
+        initialDifficulty = state.difficulty, // carry over a rating set on the Results stars
     )
 }
 

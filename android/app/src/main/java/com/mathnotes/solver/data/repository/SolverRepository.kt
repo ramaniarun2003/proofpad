@@ -10,6 +10,7 @@ import com.mathnotes.solver.data.api.Step
 import com.mathnotes.solver.data.api.VerifyRequest
 import com.mathnotes.solver.data.api.VerifyResponse
 import com.mathnotes.solver.data.db.AppDatabase
+import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.data.db.SessionEntity
 import com.squareup.moshi.Types
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +76,12 @@ class SolverRepository(context: Context) {
     }
 
     suspend fun cached(sessionId: String): SessionEntity? = dao.get(sessionId)
+
+    suspend fun setDifficulty(sessionId: String, difficulty: Difficulty?) = withContext(Dispatchers.IO) {
+        dao.get(sessionId)?.let { session ->
+            dao.upsert(session.copy(difficulty = difficulty))
+        }
+    }
 
     fun stepsOf(session: SessionEntity): List<Step> = stepsAdapter.fromJson(session.stepsJson) ?: emptyList()
 }
