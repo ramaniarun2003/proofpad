@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -33,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -77,7 +79,13 @@ private const val GUIDE_WIDTH = 0.84f
 private const val GUIDE_HEIGHT = 0.23f
 private const val GUIDE_MARGIN = 0.05f
 
-private val TOPICS = listOf("Auto", "Derivative", "Integral", "Series")
+/** Chip label → the topic value the backend expects ("unknown" = Auto / let the recognizer guess). */
+private val TOPICS = listOf(
+    "Auto" to "unknown",
+    "Derivative" to "derivative",
+    "Integral" to "integral",
+    "Series" to "series",
+)
 
 /**
  * Step 1 of the workflow, styled as mockup 01_capture: a full-bleed camera view
@@ -107,8 +115,12 @@ fun CaptureScreen(
 
     // PreviewView pixel size, needed to map the guide box to image coordinates.
     var previewSize by remember { mutableStateOf(IntSize.Zero) }
-    // Topic hint chips — selectable locally (topic is confirmed on the Review screen).
+    // Topic hint chips — the pick overrides the recognizer's guess (see captureAndRecognize).
     var selectedTopic by remember { mutableStateOf("Auto") }
+    // Bound camera + torch state, for the flash button.
+    var camera by remember { mutableStateOf<Camera?>(null) }
+    var torchOn by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) { onDispose { camera?.cameraControl?.enableTorch(false) } }
 
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
@@ -133,7 +145,8 @@ fun CaptureScreen(
                         widthFrac = GUIDE_WIDTH, heightFrac = GUIDE_HEIGHT,
                         marginFrac = GUIDE_MARGIN,
                     )
-                    vm.captureAndRecognize(f, crop); onCaptured()
+                    val topicHint = TOPICS.firstOrNull { it.first == selectedTopic }?.second ?: "unknown"
+                    vm.captureAndRecognize(f, crop, topicHint); onCaptured()
                 }
                 override fun onError(exception: ImageCaptureException) { /* surface via snackbar */ }
             },
@@ -160,7 +173,8 @@ fun CaptureScreen(
                             val provider = providerFuture.get()
                             val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
                             provider.unbindAll()
-                            provider.bindToLifecycle(lifecycle, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageCapture)
+                            camera = provider.bindToLifecycle(lifecycle, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageCapture)
+                            camera?.cameraControl?.enableTorch(torchOn)
                         }, ContextCompat.getMainExecutor(context))
                     }
                 },
@@ -189,7 +203,16 @@ fun CaptureScreen(
         ) {
             Text("ProofPad", fontFamily = NotepadFonts.PatrickHand, fontSize = 28.sp, color = NotepadColors.Paper)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                RoundIconButton(onClick = { /* flash: visual only for now */ }) { drawFlashOff() }
+                RoundIconButton(
+                    onClick = {
+                        val cam = camera
+                        if (cam != null && cam.cameraInfo.hasFlashUnit()) {
+                            torchOn = !torchOn
+                            cam.cameraControl.enableTorch(torchOn)
+                        }
+                    },
+                    highlighted = torchOn,
+                ) { if (torchOn) drawFlashOn() else drawFlashOff() }
                 RoundIconButton(onClick = onHistory) { drawHistory() }
             }
         }
@@ -229,7 +252,7 @@ fun CaptureScreen(
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
         ) {
-            TOPICS.forEach { t -> TopicChip(t, selected = selectedTopic == t) { selectedTopic = t } }
+            TOPICS.forEach { (label, _) -> TopicChip(label, selected = selectedTopic == label) { selectedTopic = label } }
         }
 
         // Bottom control row: gallery thumb · shutter · settings.
@@ -323,12 +346,12 @@ private fun DrawScope.drawGuide() {
 }
 
 @Composable
-private fun RoundIconButton(onClick: () -> Unit, icon: DrawScope.() -> Unit) {
+private fun RoundIconButton(onClick: () -> Unit, highlighted: Boolean = false, icon: DrawScope.() -> Unit) {
     Box(
         Modifier
             .size(40.dp)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.12f))
+            .background(if (highlighted) NotepadColors.StickyYellow.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.12f))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Canvas(Modifier.size(20.dp)) { icon() } }
@@ -365,6 +388,11 @@ private fun DrawScope.poly(color: Color, pts: List<Pair<Float, Float>>, close: B
 private fun DrawScope.drawFlashOff() {
     poly(NotepadColors.Paper, listOf(13f to 2f, 4f to 14f, 11f to 14f, 10f to 22f, 19f to 10f, 12f to 10f, 13f to 2f), close = true)
     poly(NotepadColors.Paper, listOf(3f to 3f, 21f to 21f))
+}
+
+private fun DrawScope.drawFlashOn() {
+    // Bolt without the slash, in ink so it reads on the yellow "on" highlight.
+    poly(NotepadColors.Ink, listOf(13f to 2f, 4f to 14f, 11f to 14f, 10f to 22f, 19f to 10f, 12f to 10f, 13f to 2f), close = true)
 }
 
 private fun DrawScope.drawHistory() {
