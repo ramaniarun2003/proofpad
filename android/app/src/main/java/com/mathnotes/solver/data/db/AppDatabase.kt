@@ -85,7 +85,8 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
                 name TEXT NOT NULL,
                 colorIndex INTEGER NOT NULL,
                 createdAt INTEGER NOT NULL,
-                sortOrder INTEGER NOT NULL
+                sortOrder INTEGER NOT NULL,
+                term TEXT
             )
             """.trimIndent()
         )

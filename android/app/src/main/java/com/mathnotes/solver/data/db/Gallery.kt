@@ -32,7 +32,10 @@ class Converters {
         value?.let { runCatching { Difficulty.valueOf(it) }.getOrNull() }
 }
 
-/** A class folder notes are filed into. The palette (colorIndex 0–5) is a UI concern. */
+/**
+ * A class folder notes are filed into. The palette (colorIndex 0–5) is a UI concern.
+ * [term] is the optional semester label shown in the folder header (mockup 08, "Fall 26").
+ */
 @Entity(tableName = "folders")
 data class FolderEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -40,6 +43,7 @@ data class FolderEntity(
     val colorIndex: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
     val sortOrder: Int = 0,
+    val term: String? = null,
 )
 
 /** A folder plus how many notes are filed in it (for the gallery's folder grid). */

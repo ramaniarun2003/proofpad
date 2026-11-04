@@ -19,8 +19,8 @@ class GalleryRepository(context: Context) {
     // --- Folders ---
     val folders: Flow<List<FolderWithCount>> = dao.foldersWithCounts()
 
-    suspend fun createFolder(name: String, colorIndex: Int, sortOrder: Int = 0): Long =
-        dao.insertFolder(FolderEntity(name = name, colorIndex = colorIndex, sortOrder = sortOrder))
+    suspend fun createFolder(name: String, colorIndex: Int, term: String? = null, sortOrder: Int = 0): Long =
+        dao.insertFolder(FolderEntity(name = name, colorIndex = colorIndex, term = term, sortOrder = sortOrder))
 
     suspend fun renameFolder(id: Long, name: String) = dao.renameFolder(id, name)
 
