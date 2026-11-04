@@ -6,7 +6,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mathnotes.solver.data.api.ApiClient
 import com.mathnotes.solver.data.api.SolveResponse
+import com.mathnotes.solver.data.db.Difficulty
+import com.mathnotes.solver.data.db.FolderWithCount
 import com.mathnotes.solver.data.db.SessionEntity
+import com.mathnotes.solver.data.repository.GalleryRepository
 import com.mathnotes.solver.data.repository.SolverRepository
 import com.mathnotes.solver.image.CropSpec
 import com.mathnotes.solver.image.Preprocessor
@@ -38,6 +41,7 @@ data class SolverUiState(
 
 class SolverViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = SolverRepository(app)
+    private val galleryRepo = GalleryRepository(app)
     private val prefs = app.getSharedPreferences("solver_settings", Context.MODE_PRIVATE)
 
     private val _state = MutableStateFlow(SolverUiState())
@@ -45,6 +49,33 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
 
     val history: StateFlow<List<SessionEntity>> =
         repo.history.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // --- Gallery ---
+    val folders: StateFlow<List<FolderWithCount>> =
+        galleryRepo.folders.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val knownTags: StateFlow<List<String>> =
+        galleryRepo.allTags.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun createFolder(name: String, colorIndex: Int, term: String? = null) {
+        viewModelScope.launch { galleryRepo.createFolder(name, colorIndex, term) }
+    }
+
+    /** File the current solved note into the gallery, then invoke [onDone] on the main thread. */
+    fun saveToGallery(
+        folderId: Long,
+        title: String?,
+        difficulty: Difficulty,
+        tags: List<String>,
+        keepPhoto: Boolean,
+        onDone: () -> Unit,
+    ) {
+        val id = _state.value.sessionId
+        if (id.isBlank()) { onDone(); return }
+        viewModelScope.launch {
+            galleryRepo.saveToGallery(id, folderId, title?.ifBlank { null }, difficulty, tags, keepPhoto)
+            onDone()
+        }
+    }
 
     fun setBackendUrl(url: String) { ApiClient.baseUrl = url }
     val backendUrl: String get() = ApiClient.baseUrl

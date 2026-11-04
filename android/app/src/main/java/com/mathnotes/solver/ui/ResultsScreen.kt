@@ -68,7 +68,7 @@ private fun sympyFn(topic: String): String = when (topic) {
  * Stateless so both states can be previewed and screenshotted; [ResultsScreen] binds it to the VM.
  */
 @Composable
-fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit) {
+fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery: () -> Unit) {
     val state by vm.state.collectAsState()
     val result = state.result ?: return
     val ctx = LocalContext.current
@@ -85,6 +85,7 @@ fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit) {
         details = result.details,
         onExport = { PdfExporter.exportAndShare(ctx, state) },
         onNewProblem = { vm.reset(); onNewProblem() },
+        onSaveToGallery = onSaveToGallery,
     )
 }
 
@@ -100,6 +101,7 @@ fun ResultsContent(
     details: List<String>,
     onExport: () -> Unit,
     onNewProblem: () -> Unit,
+    onSaveToGallery: (() -> Unit)? = null,
 ) {
     val flaggedIndex = if (!verified) mismatchAt else null
     val isFlagged = flaggedIndex != null
@@ -225,6 +227,20 @@ fun ResultsContent(
             "checked against SymPy ${sympyFn(topic)}(): agrees at every step"
         }
         NotepadLabel(footnote, fontSize = 16)
+
+        // Entry to the gallery save sheet (mockup 06).
+        if (onSaveToGallery != null) {
+            Spacer(Modifier.height(14.dp))
+            OutlinedButton(
+                onClick = onSaveToGallery,
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.5.dp, NotepadColors.Ink),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+            ) {
+                Text("＋ Save to gallery", fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Ink)
+            }
+        }
     }
 }
 
