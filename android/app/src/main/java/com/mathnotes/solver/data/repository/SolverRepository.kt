@@ -76,5 +76,11 @@ class SolverRepository(context: Context) {
 
     suspend fun cached(sessionId: String): SessionEntity? = dao.get(sessionId)
 
+    suspend fun rateSession(sessionId: String, rating: Int) = withContext(Dispatchers.IO) {
+        dao.get(sessionId)?.let { session ->
+            dao.upsert(session.copy(rating = rating))
+        }
+    }
+
     fun stepsOf(session: SessionEntity): List<Step> = stepsAdapter.fromJson(session.stepsJson) ?: emptyList()
 }

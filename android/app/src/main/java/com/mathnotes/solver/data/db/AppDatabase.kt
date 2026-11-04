@@ -58,6 +58,8 @@ data class SessionEntity(
     @ColumnInfo(defaultValue = "1") val keepPhoto: Boolean = true,
     val savedAt: Long? = null,
     val lastViewedAt: Long? = null,
+    // --- Session rating (v3): 0 = unrated, 1–3 = Easy/Medium/Hard ---
+    @ColumnInfo(defaultValue = "0") val rating: Int = 0,
 )
 
 @Dao
@@ -133,7 +135,14 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
-@Database(entities = [SessionEntity::class, FolderEntity::class], version = 2, exportSchema = false)
+/** v2 → v3: add the session difficulty rating column (0 = unrated). */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE sessions ADD COLUMN rating INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+@Database(entities = [SessionEntity::class, FolderEntity::class], version = 3, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun sessions(): SessionDao
@@ -144,7 +153,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "mathnotes.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
                 .also { instance = it }
         }
