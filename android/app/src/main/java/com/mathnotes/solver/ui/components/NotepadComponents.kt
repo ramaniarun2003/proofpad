@@ -1,4 +1,4 @@
-package com.mathnotes.solver.ui.theme
+package com.mathnotes.solver.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -7,11 +7,14 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +28,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mathnotes.solver.ui.theme.NotepadColors
+import com.mathnotes.solver.ui.theme.NotepadFonts
 
 /**
  * Reusable notepad chrome shared by the screens: a ruled-paper background, the
@@ -107,4 +112,32 @@ fun StickyNote(
 @Composable
 fun NotepadLabel(text: String, modifier: Modifier = Modifier, fontSize: Int = 15, color: Color = NotepadColors.Muted, fontFamily: FontFamily = NotepadFonts.PatrickHand) {
     Text(text, modifier = modifier, fontFamily = fontFamily, fontSize = fontSize.sp, color = color)
+}
+
+/**
+ * A full notepad screen: [NotepadHeader] on top, a ruled, scrollable paper body
+ * (content left-indented past the red margin), and a [NotepadBottomBar] below.
+ * [bodyModifier] lets a caller opt out of scrolling when it manages its own list.
+ */
+@Composable
+fun NotepadPage(
+    title: String,
+    caption: String?,
+    bottomBar: @Composable RowScope.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        NotepadHeader(title, caption)
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .ruledPaper()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 56.dp, end = 20.dp, top = 12.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+            content = content,
+        )
+        NotepadBottomBar(content = bottomBar)
+    }
 }

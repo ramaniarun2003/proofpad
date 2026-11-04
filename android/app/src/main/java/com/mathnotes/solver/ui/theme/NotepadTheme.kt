@@ -38,6 +38,12 @@ object NotepadColors {
     val Held = Color(0xFFA09480)
     val PaperCard = Color(0xFFECE6D6)
     val CaptureScrim = Color(0x73000000) // rgba(0,0,0,0.45)
+
+    // Capture screen (the one dark screen — see mockup 01_capture).
+    val CaptureVignetteInner = Color(0xFF5C554A)
+    val CaptureVignetteMid = Color(0xFF3A352D)
+    val CaptureVignetteOuter = Color(0xFF1B1915)
+    val CaptureCaption = Color(0xFFE8DCC0)
 }
 
 /** The three bundled families. STIX Two Text also carries an italic; Inter carries 400/500/600. */
