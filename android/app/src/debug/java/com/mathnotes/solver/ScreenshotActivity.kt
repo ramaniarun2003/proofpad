@@ -79,6 +79,7 @@ private fun VerifiedSample() {
         verified = true,
         mismatchAt = null,
         details = emptyList(),
+        difficulty = Difficulty.MEDIUM,
         onExport = {},
         onNewProblem = {},
     )

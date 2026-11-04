@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mathnotes.solver.data.api.Step
+import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.export.PdfExporter
 import com.mathnotes.solver.ui.components.HandDrawnBox
 import com.mathnotes.solver.ui.components.NotepadLabel
@@ -88,8 +89,8 @@ fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery
         verified = result.verified,
         mismatchAt = result.mismatchAt,
         details = result.details,
-        rating = state.rating,
-        onRate = vm::rate,
+        difficulty = state.difficulty,
+        onRate = vm::setDifficulty,
         onExport = { PdfExporter.exportAndShare(ctx, state) },
         onNewProblem = { vm.reset(); onNewProblem() },
         onSaveToGallery = onSaveToGallery,
@@ -106,8 +107,8 @@ fun ResultsContent(
     verified: Boolean,
     mismatchAt: Int?,
     details: List<String>,
-    rating: Int = 0,
-    onRate: (Int) -> Unit = {},
+    difficulty: Difficulty? = null,
+    onRate: (Difficulty) -> Unit = {},
     onExport: () -> Unit,
     onNewProblem: () -> Unit,
     onSaveToGallery: (() -> Unit)? = null,
@@ -229,7 +230,7 @@ fun ResultsContent(
 
         Spacer(Modifier.height(16.dp))
 
-        DifficultyRatingRow(rating = rating, onRate = onRate)
+        DifficultyRatingRow(difficulty = difficulty, onRate = onRate)
 
         Spacer(Modifier.height(10.dp))
 
@@ -288,39 +289,39 @@ private fun NoteAction(label: String, filled: Boolean) {
     }
 }
 
+/**
+ * Difficulty stars — one widget, one data field. Backs the gallery [Difficulty]
+ * (EASY/MEDIUM/HARD → 1/2/3 stars) so Results and the Save sheet stay in sync.
+ */
 @Composable
-private fun DifficultyRatingRow(rating: Int, onRate: (Int) -> Unit) {
-    val difficultyLabel = when (rating) {
-        1 -> "Easy"
-        2 -> "Medium"
-        3 -> "Hard"
-        else -> ""
+private fun DifficultyRatingRow(difficulty: Difficulty?, onRate: (Difficulty) -> Unit) {
+    val stars = when (difficulty) {
+        Difficulty.EASY -> 1; Difficulty.MEDIUM -> 2; Difficulty.HARD -> 3; null -> 0
+    }
+    val accent = when (difficulty) {
+        Difficulty.EASY -> NotepadColors.DifficultyEasy
+        Difficulty.MEDIUM -> NotepadColors.DifficultyMedium
+        Difficulty.HARD -> NotepadColors.DifficultyHard
+        null -> NotepadColors.Muted
+    }
+    val label = when (difficulty) {
+        Difficulty.EASY -> "Easy"; Difficulty.MEDIUM -> "Medium"; Difficulty.HARD -> "Hard"; null -> ""
     }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        NotepadLabel("Problem difficulty rating", fontSize = 16)
+        NotepadLabel("How hard was it?", fontSize = 16)
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             for (i in 1..3) {
-                val starColor = when {
-                    i > rating -> Color(0xFFDCDCDC)
-                    else -> when (rating) {
-                        1 -> Color(0xFF4CAF50) // Green (Easy)
-                        2 -> Color(0xFFFFB300) // Amber (Medium)
-                        3 -> Color(0xFFF44336) // Red (Hard)
-                        else -> Color(0xFFFFB300)
-                    }
-                }
+                val d = when (i) { 1 -> Difficulty.EASY; 2 -> Difficulty.MEDIUM; else -> Difficulty.HARD }
                 Text(
-                    text = if (i <= rating) "★" else "☆",
+                    text = if (i <= stars) "★" else "☆",
                     fontSize = 32.sp,
-                    color = starColor,
-                    modifier = Modifier
-                        .clickable { onRate(i) }
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    color = if (i <= stars) accent else Color(0xFFDCDCDC),
+                    modifier = Modifier.clickable { onRate(d) }.padding(horizontal = 4.dp, vertical = 2.dp),
                 )
             }
-            if (rating > 0) {
+            if (difficulty != null) {
                 Spacer(Modifier.width(8.dp))
-                Text("$difficultyLabel ($rating / 3)", fontFamily = NotepadFonts.PatrickHand, fontSize = 16.sp, color = NotepadColors.Muted)
+                Text("$label ($stars / 3)", fontFamily = NotepadFonts.PatrickHand, fontSize = 16.sp, color = NotepadColors.Muted)
             }
         }
     }

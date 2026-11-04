@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.data.db.SessionEntity
 import com.mathnotes.solver.ui.components.CheckIcon
 import com.mathnotes.solver.ui.components.CrossIcon
@@ -184,15 +185,15 @@ private fun HistoryItem(s: SessionEntity, index: Int, stepCountOf: (SessionEntit
                     fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp,
                     color = if (s.verified == false) NotepadColors.Red else NotepadColors.Muted,
                 )
-                if (s.rating > 0) {
-                    val ratingColor = when (s.rating) {
-                        1 -> Color(0xFF4CAF50)
-                        2 -> Color(0xFFFFB300)
-                        3 -> Color(0xFFF44336)
-                        else -> Color(0xFFFFB300)
+                s.difficulty?.let { d ->
+                    val stars = d.ordinal + 1
+                    val color = when (d) {
+                        Difficulty.EASY -> NotepadColors.DifficultyEasy
+                        Difficulty.MEDIUM -> NotepadColors.DifficultyMedium
+                        Difficulty.HARD -> NotepadColors.DifficultyHard
                     }
-                    val label = when (s.rating) { 1 -> "Easy"; 2 -> "Medium"; 3 -> "Hard"; else -> "" }
-                    Text("★".repeat(s.rating) + " $label", color = ratingColor, fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp)
+                    val label = when (d) { Difficulty.EASY -> "Easy"; Difficulty.MEDIUM -> "Medium"; Difficulty.HARD -> "Hard" }
+                    Text("★".repeat(stars) + " $label", color = color, fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp)
                 }
             }
         }
