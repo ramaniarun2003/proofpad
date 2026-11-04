@@ -5,9 +5,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.Surface
 import com.mathnotes.solver.data.api.Step
+import com.mathnotes.solver.data.db.Difficulty
+import com.mathnotes.solver.data.db.FolderEntity
+import com.mathnotes.solver.data.db.FolderWithCount
 import com.mathnotes.solver.data.db.SessionEntity
 import com.mathnotes.solver.ui.HistoryContent
 import com.mathnotes.solver.ui.ResultsContent
+import com.mathnotes.solver.ui.SaveToGalleryContent
 import com.mathnotes.solver.ui.theme.NotepadColors
 import com.mathnotes.solver.ui.theme.NotepadTheme
 
@@ -29,6 +33,7 @@ class ScreenshotActivity : ComponentActivity() {
                     when (state) {
                         "flagged" -> FlaggedSample()
                         "history" -> HistorySample()
+                        "save" -> SaveSample()
                         else -> VerifiedSample()
                     }
                 }
@@ -74,6 +79,28 @@ private fun VerifiedSample() {
         details = emptyList(),
         onExport = {},
         onNewProblem = {},
+    )
+}
+
+@androidx.compose.runtime.Composable
+private fun SaveSample() {
+    val folders = listOf(
+        FolderWithCount(FolderEntity(id = 1, name = "Calc II", colorIndex = 0), 11),
+        FolderWithCount(FolderEntity(id = 2, name = "Diff Eq", colorIndex = 1), 7),
+        FolderWithCount(FolderEntity(id = 3, name = "Physics", colorIndex = 2), 5),
+    )
+    SaveToGalleryContent(
+        problemLatex = "\\int 2x \\, dx",
+        answerLatex = "x^{2} + C",
+        folders = folders,
+        knownTags = listOf("HW 7", "Quiz prep", "Exam 2"),
+        onSkip = {},
+        onCreateFolder = { _, _, _ -> },
+        onSave = { _, _, _, _, _, _ -> },
+        initialTitle = "HW 7 problem 3",
+        initialFolderId = 1,
+        initialDifficulty = Difficulty.MEDIUM,
+        initialTags = listOf("HW 7"),
     )
 }
 

@@ -44,7 +44,27 @@ object NotepadColors {
     val CaptureVignetteMid = Color(0xFF3A352D)
     val CaptureVignetteOuter = Color(0xFF1B1915)
     val CaptureCaption = Color(0xFFE8DCC0)
+
+    // Difficulty dots (mockups 06/07/08).
+    val DifficultyEasy = Color(0xFF1F9D55)
+    val DifficultyMedium = Color(0xFFE0A000)
+    val DifficultyHard = Color(0xFFD0453A)
 }
+
+/** A folder's tab + body colors; colorIndex 0–5 indexes [FolderPalette]. */
+data class FolderColor(val tab: Color, val body: Color)
+
+/** Fixed 6-color folder palette. The first three match the mockups (Calc II / Diff Eq / Physics). */
+val FolderPalette: List<FolderColor> = listOf(
+    FolderColor(Color(0xFFF0D78A), Color(0xFFF6E3A1)), // yellow
+    FolderColor(Color(0xFFA9C9E0), Color(0xFFC7DCEC)), // blue
+    FolderColor(Color(0xFFB9D8B4), Color(0xFFD3E8CF)), // green
+    FolderColor(Color(0xFFE3A3A3), Color(0xFFF1D5D5)), // red
+    FolderColor(Color(0xFFCBB7E3), Color(0xFFE4D8F2)), // purple
+    FolderColor(Color(0xFFE6C19A), Color(0xFFF2DEC4)), // orange
+)
+
+fun folderColor(index: Int): FolderColor = FolderPalette[index.coerceIn(0, FolderPalette.lastIndex)]
 
 /** The three bundled families. STIX Two Text also carries an italic; Inter carries 400/500/600. */
 object NotepadFonts {
