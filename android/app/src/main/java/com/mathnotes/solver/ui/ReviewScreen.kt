@@ -43,13 +43,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.mathnotes.solver.ui.theme.NotepadBottomBar
+import com.mathnotes.solver.ui.components.NotepadBottomBar
+import com.mathnotes.solver.ui.components.NotepadHeader
+import com.mathnotes.solver.ui.components.NotepadLabel
+import com.mathnotes.solver.ui.components.StickyNote
+import com.mathnotes.solver.ui.components.ruledPaper
 import com.mathnotes.solver.ui.theme.NotepadColors
 import com.mathnotes.solver.ui.theme.NotepadFonts
-import com.mathnotes.solver.ui.theme.NotepadHeader
-import com.mathnotes.solver.ui.theme.NotepadLabel
-import com.mathnotes.solver.ui.theme.StickyNote
-import com.mathnotes.solver.ui.theme.ruledPaper
 
 /** Insert helpers mirroring the token row in the mockup; tapping appends the snippet. */
 private val LATEX_TOKENS = listOf("\\int", "\\frac{}{}", "^{}", "\\sqrt{}", "\\sin", "\\ln", "\\sum")

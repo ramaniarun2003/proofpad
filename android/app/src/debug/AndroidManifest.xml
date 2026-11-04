@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Debug-only harness for capturing Results screen states via adb screencap.
+         Exported so `adb shell am start` can launch it; never shipped in release. -->
+    <application>
+        <activity
+            android:name=".ScreenshotActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+    </application>
+</manifest>
