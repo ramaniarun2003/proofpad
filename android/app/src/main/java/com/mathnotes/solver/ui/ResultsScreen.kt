@@ -3,6 +3,7 @@ package com.mathnotes.solver.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -53,8 +55,11 @@ private val TRIVIAL_RULES = setOf(
     "constant rule", "identity", "sum rule",
 )
 
-private fun firstNonTrivial(steps: List<Step>): Int =
-    steps.indexOfFirst { it.rule !in TRIVIAL_RULES }.let { if (it < 0) 0 else it }
+private fun firstNonTrivial(steps: List<Step>): Int? {
+    if (steps.isEmpty()) return null
+    val idx = steps.indexOfFirst { it.rule !in TRIVIAL_RULES }
+    return if (idx < 0) 0 else idx
+}
 
 private fun sympyFn(topic: String): String = when (topic) {
     "integral" -> "integrate"
@@ -83,6 +88,8 @@ fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit) {
         verified = result.verified,
         mismatchAt = result.mismatchAt,
         details = result.details,
+        rating = state.rating,
+        onRate = vm::rate,
         onExport = { PdfExporter.exportAndShare(ctx, state) },
         onNewProblem = { vm.reset(); onNewProblem() },
     )
@@ -98,6 +105,8 @@ fun ResultsContent(
     verified: Boolean,
     mismatchAt: Int?,
     details: List<String>,
+    rating: Int = 0,
+    onRate: (Int) -> Unit = {},
     onExport: () -> Unit,
     onNewProblem: () -> Unit,
 ) {
@@ -173,7 +182,7 @@ fun ResultsContent(
                 message = details.joinToString(" ").ifBlank { "Step $n doesn't match step ${n - 1}." },
                 resolveFromStep = n - 1,
             )
-        } else if (selected != null) {
+        } else if (selected != null && selected!! < steps.size) {
             val s = steps[selected!!]
             StickyNote(rotationDeg = 1.5f) {
                 Text("why step ${selected!! + 1}", fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp, color = NotepadColors.Muted)
@@ -216,6 +225,10 @@ fun ResultsContent(
             }
         }
 
+        Spacer(Modifier.height(16.dp))
+
+        DifficultyRatingRow(rating = rating, onRate = onRate)
+
         Spacer(Modifier.height(10.dp))
 
         // Muted footnote.
@@ -256,5 +269,39 @@ private fun NoteAction(label: String, filled: Boolean) {
             fontSize = 15.sp,
             color = if (filled) NotepadColors.StickyPink else NotepadColors.NoteInkPink,
         )
+    }
+}
+
+@Composable
+private fun DifficultyRatingRow(rating: Int, onRate: (Int) -> Unit) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        NotepadLabel("Problem difficulty rating", fontSize = 16)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            for (i in 1..5) {
+                val starColor = when {
+                    i > rating -> Color(0xFFDCDCDC)
+                    else -> when (rating) {
+                        1 -> Color(0xFF4CAF50) // Green (Easy)
+                        2 -> Color(0xFF8BC34A) // Light Green
+                        3 -> Color(0xFFFFB300) // Amber (Medium)
+                        4 -> Color(0xFFFF9800) // Orange (Hard)
+                        5 -> Color(0xFFF44336) // Red (Very Hard)
+                        else -> Color(0xFFFFB300)
+                    }
+                }
+                Text(
+                    text = if (i <= rating) "★" else "☆",
+                    fontSize = 32.sp,
+                    color = starColor,
+                    modifier = Modifier
+                        .clickable { onRate(i) }
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+            }
+            if (rating > 0) {
+                Spacer(Modifier.width(8.dp))
+                Text("$rating / 5", fontFamily = NotepadFonts.PatrickHand, fontSize = 16.sp, color = NotepadColors.Muted)
+            }
+        }
     }
 }

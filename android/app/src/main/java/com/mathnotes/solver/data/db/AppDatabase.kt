@@ -30,6 +30,7 @@ data class SessionEntity(
     val answerLatex: String = "",
     val verified: Boolean? = null,
     val mismatchAt: Int? = null,
+    val rating: Int = 0,
 )
 
 @Dao
@@ -47,7 +48,7 @@ interface SessionDao {
     suspend fun delete(id: String)
 }
 
-@Database(entities = [SessionEntity::class], version = 1, exportSchema = false)
+@Database(entities = [SessionEntity::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun sessions(): SessionDao
 

@@ -34,6 +34,7 @@ data class SolverUiState(
     val lowConfidence: Boolean = false,
     val topic: String = "unknown",
     val result: SolveResponse? = null,
+    val rating: Int = 0,
 )
 
 class SolverViewModel(app: Application) : AndroidViewModel(app) {
@@ -119,11 +120,21 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
             it.copy(
                 sessionId = session.sessionId, latex = session.confirmedLatex.ifEmpty { session.recognizedLatex },
                 topic = session.topic, imageFile = session.imagePath?.let(::File),
+                rating = session.rating,
                 result = SolveResponse(
                     sessionId = session.sessionId, topic = session.topic, steps = repo.stepsOf(session),
                     answerLatex = session.answerLatex, verified = session.verified ?: false, mismatchAt = session.mismatchAt,
                 ),
             )
+        }
+    }
+
+    fun rate(rating: Int) {
+        val sessionId = _state.value.sessionId
+        if (sessionId.isBlank()) return
+        _state.update { it.copy(rating = rating) }
+        viewModelScope.launch {
+            repo.rateSession(sessionId, rating)
         }
     }
 
