@@ -187,13 +187,12 @@ private fun HistoryItem(s: SessionEntity, index: Int, stepCountOf: (SessionEntit
                 if (s.rating > 0) {
                     val ratingColor = when (s.rating) {
                         1 -> Color(0xFF4CAF50)
-                        2 -> Color(0xFF8BC34A)
-                        3 -> Color(0xFFFFB300)
-                        4 -> Color(0xFFFF9800)
-                        5 -> Color(0xFFF44336)
+                        2 -> Color(0xFFFFB300)
+                        3 -> Color(0xFFF44336)
                         else -> Color(0xFFFFB300)
                     }
-                    Text("★".repeat(s.rating), color = ratingColor, fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp)
+                    val label = when (s.rating) { 1 -> "Easy"; 2 -> "Medium"; 3 -> "Hard"; else -> "" }
+                    Text("★".repeat(s.rating) + " $label", color = ratingColor, fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp)
                 }
             }
         }

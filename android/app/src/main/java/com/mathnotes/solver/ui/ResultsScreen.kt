@@ -274,18 +274,22 @@ private fun NoteAction(label: String, filled: Boolean) {
 
 @Composable
 private fun DifficultyRatingRow(rating: Int, onRate: (Int) -> Unit) {
+    val difficultyLabel = when (rating) {
+        1 -> "Easy"
+        2 -> "Medium"
+        3 -> "Hard"
+        else -> ""
+    }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         NotepadLabel("Problem difficulty rating", fontSize = 16)
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            for (i in 1..5) {
+            for (i in 1..3) {
                 val starColor = when {
                     i > rating -> Color(0xFFDCDCDC)
                     else -> when (rating) {
                         1 -> Color(0xFF4CAF50) // Green (Easy)
-                        2 -> Color(0xFF8BC34A) // Light Green
-                        3 -> Color(0xFFFFB300) // Amber (Medium)
-                        4 -> Color(0xFFFF9800) // Orange (Hard)
-                        5 -> Color(0xFFF44336) // Red (Very Hard)
+                        2 -> Color(0xFFFFB300) // Amber (Medium)
+                        3 -> Color(0xFFF44336) // Red (Hard)
                         else -> Color(0xFFFFB300)
                     }
                 }
@@ -300,7 +304,7 @@ private fun DifficultyRatingRow(rating: Int, onRate: (Int) -> Unit) {
             }
             if (rating > 0) {
                 Spacer(Modifier.width(8.dp))
-                Text("$rating / 5", fontFamily = NotepadFonts.PatrickHand, fontSize = 16.sp, color = NotepadColors.Muted)
+                Text("$difficultyLabel ($rating / 3)", fontFamily = NotepadFonts.PatrickHand, fontSize = 16.sp, color = NotepadColors.Muted)
             }
         }
     }
