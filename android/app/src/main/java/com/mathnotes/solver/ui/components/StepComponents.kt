@@ -35,13 +35,22 @@ import com.mathnotes.solver.ui.LatexView
 import com.mathnotes.solver.ui.theme.NotepadColors
 import com.mathnotes.solver.ui.theme.NotepadFonts
 
-/** A tilted ink stamp: green "VERIFIED" or red "CHECK STEP n". */
+/**
+ * A tilted ink stamp: green "VERIFIED" or red "CHECK STEP n". [fontSize] and [rotation]
+ * default to the results-page look; the welcome cover reuses it smaller and tilted +9°.
+ */
 @Composable
-fun Stamp(text: String, verified: Boolean, modifier: Modifier = Modifier) {
+fun Stamp(
+    text: String,
+    verified: Boolean,
+    modifier: Modifier = Modifier,
+    fontSize: androidx.compose.ui.unit.TextUnit = 20.sp,
+    rotation: Float = -8f,
+) {
     val color = if (verified) NotepadColors.Green else NotepadColors.Red
     Box(
         modifier
-            .graphicsLayer { rotationZ = -8f; alpha = 0.88f }
+            .graphicsLayer { rotationZ = rotation; alpha = 0.88f }
             .drawBehind {
                 drawRoundRect(
                     color = color,
@@ -51,7 +60,7 @@ fun Stamp(text: String, verified: Boolean, modifier: Modifier = Modifier) {
             }
             .padding(horizontal = 12.dp, vertical = 3.dp),
     ) {
-        Text(text, fontFamily = NotepadFonts.PatrickHand, fontSize = 20.sp, color = color, letterSpacing = 1.5.sp)
+        Text(text, fontFamily = NotepadFonts.PatrickHand, fontSize = fontSize, color = color, letterSpacing = 1.5.sp)
     }
 }
 

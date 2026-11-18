@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mathnotes.solver.data.api.ApiClient
+import com.mathnotes.solver.data.WelcomePrefs
 import com.mathnotes.solver.data.api.SolveResponse
 import com.mathnotes.solver.data.db.SessionEntity
 import com.mathnotes.solver.data.repository.SolverRepository
@@ -48,6 +49,10 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setBackendUrl(url: String) { ApiClient.baseUrl = url }
     val backendUrl: String get() = ApiClient.baseUrl
+
+    /** One-time welcome cover: mark it seen after "Get started", or clear it to re-demo from Settings. */
+    fun markWelcomeSeen() = viewModelScope.launch { WelcomePrefs.setSeen(getApplication(), true) }
+    fun resetWelcome() = viewModelScope.launch { WelcomePrefs.setSeen(getApplication(), false) }
 
     /** Debug toggles exposed on the Settings screen; persisted so they survive restarts. */
     var debugImages: Boolean
