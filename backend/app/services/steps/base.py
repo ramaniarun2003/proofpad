@@ -9,6 +9,7 @@ independently instead of only the final answer.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import sympy as sp
@@ -25,12 +26,12 @@ class StepRec:
     # For series, the chain carries a verdict string instead of an expression.
     verdict: str | None = None
 
-    def to_model(self, index: int) -> Step:
+    def to_model(self, index: int, format_latex: Callable[[sp.Basic], str] = sp.latex) -> Step:
         return Step(
             index=index,
             rule=self.rule,
-            before_latex=sp.latex(self.before),
-            after_latex=self.verdict if self.verdict is not None else sp.latex(self.after),
+            before_latex=format_latex(self.before),
+            after_latex=self.verdict if self.verdict is not None else format_latex(self.after),
             note=self.note,
         )
 
@@ -40,9 +41,10 @@ class Solution:
     steps: list[StepRec] = field(default_factory=list)
     answer: sp.Basic | None = None
     verdict: str | None = None       # series: "converges" | "diverges" | "inconclusive"
+    format_latex: Callable[[sp.Basic], str] = sp.latex
 
     @property
     def answer_latex(self) -> str:
         if self.verdict is not None:
             return self.verdict
-        return sp.latex(self.answer) if self.answer is not None else ""
+        return self.format_latex(self.answer) if self.answer is not None else ""

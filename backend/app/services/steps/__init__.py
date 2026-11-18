@@ -12,8 +12,11 @@ __all__ = ["solve", "Solution", "StepRec"]
 def solve(p: Parsed, topic: Topic) -> tuple[Topic, Solution]:
     topic = p.topic if topic in (Topic.unknown, None) else topic
     if topic == Topic.derivative:
-        return topic, derivative.generate(p.inner, p.var)
+        return topic, derivative.generate(p.derivative_expression, partial=p.is_partial_derivative)
     if topic == Topic.integral:
+        iterated = p.iterated_integral
+        if iterated is not None:
+            return topic, integral.generate_iterated(iterated)
         return topic, integral.generate(p.inner, p.var, p.limits)
     if topic == Topic.series:
         if p.index is None or p.limits is None:
@@ -21,4 +24,4 @@ def solve(p: Parsed, topic: Topic) -> tuple[Topic, Solution]:
         return topic, series.generate(p.inner, p.index, p.limits)
     # Bare expression with no operator: default to differentiation, since that
     # is the most common thing written without an operator in notes.
-    return Topic.derivative, derivative.generate(p.inner, p.var)
+    return Topic.derivative, derivative.generate(p.derivative_expression)

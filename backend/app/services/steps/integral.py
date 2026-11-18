@@ -147,3 +147,24 @@ def generate(inner: sp.Basic, x: sp.Symbol, limits: tuple | None = None) -> Solu
     else:
         sol.answer = final
     return sol
+
+
+def generate_iterated(integral: sp.Integral) -> Solution:
+    sol = Solution()
+    integrand = integral.function
+    before = integral
+    for i, limit in enumerate(integral.limits, start=1):
+        integrand = sp.integrate(integrand, limit)
+        remaining = integral.limits[i:]
+        after = sp.Integral(integrand, *remaining) if remaining else integrand
+        sol.steps.append(StepRec(
+            rule="evaluate integral",
+            before=before,
+            after=after,
+            note=f"Integrate with respect to {limit[0]}.",
+        ))
+        before = after
+    if integrand.has(sp.Integral, sp.nan):
+        raise ValueError("could not evaluate the iterated integral symbolically")
+    sol.answer = integrand
+    return sol

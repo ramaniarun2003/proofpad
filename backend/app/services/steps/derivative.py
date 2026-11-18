@@ -1,9 +1,8 @@
 """Rule-based derivative steps.
 
-Strategy: start from the unevaluated Derivative(f, x). Repeatedly find the
-first unevaluated Derivative node in the expression, apply ONE named rule to
-it (which may leave smaller unevaluated Derivative nodes behind), and record
-the whole expression before/after. When no Derivative nodes remain, simplify.
+Work from the innermost derivative outward. Apply one named rule to the
+next differentiation variable and keep the remaining derivatives in place.
+Each step records the entire expression before and after the rewrite.
 
 Because each step rewrites one node with an equal expression, every
 intermediate expression equals the true derivative — the verifier relies on
@@ -12,17 +11,39 @@ that. Add rules by extending `_apply_rule`; keep the fallback last.
 from __future__ import annotations
 
 import sympy as sp
+from sympy.printing.latex import LatexPrinter
 
 from .base import Solution, StepRec
 
 MAX_STEPS = 60
 
 
-def _first_derivative_node(expr: sp.Basic) -> sp.Derivative | None:
-    for node in sp.preorder_traversal(expr):
-        if isinstance(node, sp.Derivative):
-            return node
-    return None
+class _PartialLatexPrinter(LatexPrinter):
+    def _print_Derivative(self, expr):
+        denominator = []
+        order = 0
+        for variable, count in reversed(expr.variable_count):
+            exponent = "" if count == 1 else f"^{{{count}}}"
+            denominator.append(r"\partial " + self._print(variable) + exponent)
+            order += count
+        exponent = "" if order == 1 else f"^{{{order}}}"
+        operand = self._print(expr.expr)
+        return rf"\frac{{\partial{exponent} \left({operand}\right)}}{{{''.join(denominator)}}}"
+
+    def _print(self, expr, **kwargs):
+        latex = super()._print(expr, **kwargs)
+        # Keep any following product outside the scope of a function call.
+        return "{" + latex + "}" if isinstance(expr, sp.Function) else latex
+
+
+def _partial_latex(expr: sp.Basic) -> str:
+    needs_mul_symbol = any(
+        node.is_Mul and any(factor.is_Add or isinstance(factor, sp.Derivative) for factor in node.args)
+        for node in sp.preorder_traversal(expr)
+    )
+    return _PartialLatexPrinter({
+        "mul_symbol": "dot" if needs_mul_symbol else None,
+    }).doprint(expr)
 
 
 def _D(f: sp.Basic, x: sp.Symbol) -> sp.Basic:
@@ -92,16 +113,31 @@ def _apply_rule(f: sp.Basic, x: sp.Symbol) -> tuple[str, sp.Basic, str]:
     return "computer algebra system", sp.diff(f, x), "no hand rule matched; SymPy computed this node"
 
 
-def generate(inner: sp.Basic, x: sp.Symbol) -> Solution:
-    sol = Solution()
-    expr: sp.Basic = sp.Derivative(inner, x)
+def generate(expr: sp.Basic, *, partial: bool = False) -> Solution:
+    sol = Solution(format_latex=_partial_latex if partial else sp.latex)
+    unresolved: set[sp.Derivative] = set()
     for _ in range(MAX_STEPS):
-        node = _first_derivative_node(expr)
+        node = next(
+            (part for part in sp.postorder_traversal(expr)
+             if isinstance(part, sp.Derivative) and part not in unresolved),
+            None,
+        )
         if node is None:
             break
+        (x, count), *remaining = node.variable_count
         rule, replacement, note = _apply_rule(node.expr, x)
+        if count > 1:
+            remaining.insert(0, (x, count - 1))
+        if remaining and replacement != 0:
+            replacement = sp.Derivative(replacement, *remaining)
+        if replacement == node:
+            unresolved.add(node)
+            continue
         new_expr = expr.xreplace({node: replacement})
-        sol.steps.append(StepRec(rule=rule, before=expr, after=new_expr, note=note))
+        sol.steps.append(StepRec(
+            rule=rule, before=expr, after=new_expr,
+            note=f"Differentiate with respect to {x}. {note}" if partial else note,
+        ))
         expr = new_expr
     final = sp.simplify(expr)
     if final != expr:

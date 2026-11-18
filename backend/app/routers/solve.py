@@ -38,7 +38,7 @@ def solve(req: SolveRequest, db: Session = Depends(get_db)):
         raise HTTPException(500, f"step generation failed: {exc}")
 
     vr = verify(parsed, topic, sol)
-    steps = [s.to_model(i) for i, s in enumerate(sol.steps)]
+    steps = [s.to_model(i, sol.format_latex) for i, s in enumerate(sol.steps)]
 
     row = _get_or_create(db, req.session_id)
     row.confirmed_latex = req.latex
