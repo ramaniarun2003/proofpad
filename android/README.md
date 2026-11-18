@@ -5,13 +5,12 @@ Kotlin · Jetpack Compose · CameraX · OpenCV · Retrofit/Moshi · Room · JLat
 ## Open it
 1. Android Studio → **Open** → this `android/` folder. Accept the Gradle wrapper / SDK prompts
    (the wrapper jar is not checked in; Studio generates it, or run `gradle wrapper` once).
-2. Point the app at the backend. Either add to `local.properties` (not committed):
+2. Run on a device with a camera. The app requests camera permission on first launch.
+3. Open the app's backend settings and save the server URL. The app reuses the last saved URL on launch.
+   For the emulator, enter `http://10.0.2.2:8000/`. To provide an initial URL for a build, add this to `local.properties`.
    ```
    BACKEND_URL=http://192.168.1.42:8000/
    ```
-   or change it at runtime from the **Backend** button on the capture screen.
-   Emulator → `http://10.0.2.2:8000/` (the default).
-3. Run on a device with a camera (a Pixel is what the report assumes). Camera permission is requested on first launch.
 
 ## Where things are
 | Path | Role (report §4.1) |

@@ -63,8 +63,9 @@ antiderivatives). The verifier depends on it — `test_chain_invariant_every_ste
 3. `pytest` — the verifier will tell you if the rule's output is wrong.
 
 ## Android — see `android/README.md`
-Open `android/` in Android Studio, set `BACKEND_URL` in `local.properties` (or from the app's
-Backend button), run on a device. Emulator default is `http://10.0.2.2:8000/`.
+Open `android/` in Android Studio and run on a device. Set the URL in the app's backend settings.
+The app reuses the last saved URL on launch. To provide an initial URL for a build, set `BACKEND_URL`
+in `local.properties`. For the emulator, use `http://10.0.2.2:8000/`.
 
 ## Demo-day network (report §3.4)
 Laptop runs `./run.sh` on a dedicated hotspot; phones join the same hotspot and point at the laptop's

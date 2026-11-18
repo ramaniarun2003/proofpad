@@ -298,12 +298,23 @@ internal fun DrawScope.drawCamera(color: Color) {
 @Composable
 fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit) {
     var url by remember { mutableStateOf(vm.backendUrl) }
+    var invalidUrl by remember { mutableStateOf(false) }
     var debugImages by remember { mutableStateOf(vm.debugImages) }
     var adaptiveThreshold by remember { mutableStateOf(vm.useAdaptiveThreshold) }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Backend URL", style = MaterialTheme.typography.headlineSmall)
         Text("Laptop running uvicorn on the same Wi-Fi, e.g. http://192.168.1.42:8000/. Emulator → http://10.0.2.2:8000/.")
-        OutlinedTextField(value = url, onValueChange = { url = it }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(
+            value = url,
+            onValueChange = {
+                url = it
+                invalidUrl = false
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            isError = invalidUrl,
+            supportingText = if (invalidUrl) ({ Text("Enter a valid HTTP or HTTPS URL.") }) else null,
+        )
 
         Text("Debug", style = MaterialTheme.typography.titleMedium)
         SettingToggle(
@@ -319,7 +330,9 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit) {
             onChange = { adaptiveThreshold = it; vm.useAdaptiveThreshold = it },
         )
 
-        Button(onClick = { vm.setBackendUrl(url.trim()); onDone() }, modifier = Modifier.fillMaxWidth()) { Text("Save") }
+        Button(onClick = {
+            if (vm.setBackendUrl(url)) onDone() else invalidUrl = true
+        }, modifier = Modifier.fillMaxWidth()) { Text("Save") }
     }
 }
 

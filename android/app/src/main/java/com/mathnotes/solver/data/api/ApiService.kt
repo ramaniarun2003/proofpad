@@ -3,6 +3,8 @@ package com.mathnotes.solver.data.api
 import com.mathnotes.solver.BuildConfig
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody
@@ -36,18 +38,30 @@ interface ApiService {
 }
 
 object ApiClient {
-    /** Changeable at runtime from the settings sheet, so the demo laptop's IP can be typed in. */
-    @Volatile var baseUrl: String = BuildConfig.BACKEND_URL
-        set(value) { field = if (value.endsWith("/")) value else "$value/"; cached = null }
+    @Volatile
+    @set:Synchronized
+    var baseUrl: HttpUrl? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            cached = null
+        }
 
-    @Volatile private var cached: ApiService? = null
+    private var cached: ApiService? = null
 
     val moshi: Moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
 
     val service: ApiService
-        get() = cached ?: build().also { cached = it }
+        @Synchronized get() = cached ?: build().also { cached = it }
+
+    fun parseBaseUrl(value: String): HttpUrl? {
+        val url = value.trim().toHttpUrlOrNull() ?: return null
+        if (url.encodedPath.endsWith('/')) return url
+        return url.newBuilder().addPathSegment("").build()
+    }
 
     private fun build(): ApiService {
+        val url = checkNotNull(baseUrl) { "Set the backend URL in Settings." }
         val logging = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
@@ -58,7 +72,7 @@ object ApiClient {
             .addInterceptor(logging)
             .build()
         return Retrofit.Builder()
-            .baseUrl(baseUrl)
+            .baseUrl(url)
             .client(client)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()

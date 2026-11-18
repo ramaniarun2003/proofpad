@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.mathnotes.solver.BuildConfig
 import com.mathnotes.solver.data.api.ApiClient
 import com.mathnotes.solver.data.api.SolveResponse
 import com.mathnotes.solver.data.db.Difficulty
@@ -25,6 +26,8 @@ import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.io.File
 import java.io.IOException
+
+private const val BACKEND_URL_PREF = "backend_url"
 
 /** One state object for the whole capture → review → results flow. */
 data class SolverUiState(
@@ -50,9 +53,15 @@ data class FolderFilter(
 )
 
 class SolverViewModel(app: Application) : AndroidViewModel(app) {
+    private val prefs = app.getSharedPreferences("solver_settings", Context.MODE_PRIVATE)
+
+    init {
+        val savedUrl = prefs.getString(BACKEND_URL_PREF, null)
+        ApiClient.baseUrl = ApiClient.parseBaseUrl(savedUrl ?: BuildConfig.BACKEND_URL)
+    }
+
     private val repo = SolverRepository(app)
     private val galleryRepo = GalleryRepository(app)
-    private val prefs = app.getSharedPreferences("solver_settings", Context.MODE_PRIVATE)
 
     private val _state = MutableStateFlow(SolverUiState())
     val state: StateFlow<SolverUiState> = _state
@@ -127,8 +136,14 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setBackendUrl(url: String) { ApiClient.baseUrl = url }
-    val backendUrl: String get() = ApiClient.baseUrl
+    fun setBackendUrl(url: String): Boolean {
+        val baseUrl = ApiClient.parseBaseUrl(url) ?: return false
+        prefs.edit().putString(BACKEND_URL_PREF, baseUrl.toString()).apply()
+        ApiClient.baseUrl = baseUrl
+        return true
+    }
+
+    val backendUrl: String get() = ApiClient.baseUrl?.toString().orEmpty()
 
     /** Debug toggles exposed on the Settings screen; persisted so they survive restarts. */
     var debugImages: Boolean
@@ -226,7 +241,8 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
             503 -> "Recognition service unavailable — retry, or open a cached session from History."
             else -> "Server error ${e.code()}"
         }
-        is IOException -> "Cannot reach the backend at ${ApiClient.baseUrl}. Same Wi-Fi? Correct IP in Settings?"
+        is IOException -> ApiClient.baseUrl?.let { "Cannot reach the backend at $it. Same Wi-Fi? Correct IP in Settings?" }
+            ?: "Set the backend URL in Settings."
         else -> e.message ?: e.toString()
     }
 }
