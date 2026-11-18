@@ -8,7 +8,7 @@ from app.services.steps import solve
 from app.services.symbolic import ParseError, parse
 from app.services.verify import verify, verify_latex_steps
 
-x = sp.Symbol("x")
+x, y = sp.symbols("x y")
 
 
 def run(latex, topic=Topic.unknown):
@@ -42,6 +42,46 @@ def test_derivatives_verified_with_expected_rules(latex, rules):
     assert v.verified and v.mismatch_at is None, v.details
     assert rules <= {s.rule for s in sol.steps}
     assert sp.simplify(sol.answer - sp.diff(parse(latex).inner, x)) == 0
+
+
+@pytest.mark.parametrize("latex, variables, expected", [
+    (r"\frac{\partial}{\partial y}(x^2y + \sin(y))", (y,), x**2 + sp.cos(y)),
+    (r"\frac{\partial x^2y}{\partial x}", (x,), 2 * x * y),
+    (r"\frac{\partial}{\partial y}x^2", (y,), 0),
+    (r"\frac{\partial^2}{\partial x^2}(x^3y)", (x, x), 6 * x * y),
+    (r"\frac{\partial^3 x^3y^3}{\partial x^2\partial y}", (y, x, x), 18 * x * y**2),
+    (r"\frac{\partial}{\partial x}\frac{\partial}{\partial y}(x^2y^3)", (y, x), 6 * x * y**2),
+    (r"\frac{\partial^2}{\partial x\partial y}\frac{x}{1+y}", (y, x), -1 / (1 + y)**2),
+    (r"\frac{\partial^2}{\partial y\partial x}(x^2\cos(xy))",
+     (x, y), -x**2 * (x * y * sp.cos(x * y) + 3 * sp.sin(x * y))),
+])
+def test_partial_derivatives_keep_the_order_and_round_trip(latex, variables, expected):
+    p = parse(latex)
+    topic, sol = solve(p, Topic.unknown)
+
+    assert topic == Topic.derivative
+    assert p.expr.variables == variables
+    assert sp.simplify(sol.answer - expected) == 0
+    assert sol.steps[0].before == p.expr
+    assert all(a.after == b.before for a, b in zip(sol.steps, sol.steps[1:]))
+    result = verify(p, topic, sol)
+    assert result.verified, result.details
+    result = verify_latex_steps(p, topic, [(step.rule, sol.format_latex(step.after)) for step in sol.steps])
+    assert result.verified, result.details
+
+
+def test_partial_derivative_with_indexed_variable():
+    topic, sol, result = run(r"\frac{\partial}{\partial x_1}(x_1^2x_2)")
+    assert topic == Topic.derivative
+    assert sol.answer_latex == r"2 x_{1} x_{2}"
+    assert result.verified, result.details
+
+
+def test_sum_of_partial_derivatives_is_evaluated():
+    topic, sol, result = run(r"\frac{\partial x^2}{\partial x}+\frac{\partial y^2}{\partial y}")
+    assert topic == Topic.derivative
+    assert sol.answer == 2 * x + 2 * y
+    assert result.verified, result.details
 
 
 @pytest.mark.parametrize("latex, rule", [

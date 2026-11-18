@@ -63,7 +63,7 @@ def equivalent(a: sp.Basic, b: sp.Basic, antiderivative_vars: tuple[sp.Symbol, .
 
 def _truth(p: Parsed, topic: Topic):
     if topic == Topic.derivative:
-        return sp.diff(p.inner, p.var)
+        return p.derivative_expression.doit()
     if topic == Topic.integral:
         iterated = p.iterated_integral
         if iterated is not None:

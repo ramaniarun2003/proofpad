@@ -5,9 +5,9 @@ import re
 from dataclasses import dataclass
 
 import sympy as sp
-from sympy.parsing.latex import parse_latex
 
 from ..models import Topic
+from .latex_derivative import parse_derivative_latex
 from .latex_norm import normalize
 
 _INTEGRAL_SIGN = re.compile(r"\\(?:iiint|iint|int)(?![A-Za-z])")
@@ -27,6 +27,13 @@ class Parsed:
     var: sp.Symbol
     limits: tuple | None = None   # (lower, upper) for definite integrals / sums
     index: sp.Symbol | None = None  # summation index for series
+    is_partial_derivative: bool = False
+
+    @property
+    def derivative_expression(self) -> sp.Expr:
+        if self.topic == Topic.derivative:
+            return self.expr
+        return sp.Derivative(self.inner, self.var)
 
     @property
     def iterated_integral(self) -> sp.Integral | None:
@@ -76,7 +83,7 @@ def parse(latex: str, variable: str = "x") -> Parsed:
     text = _INTEGRAL_SIGN.sub(_expand_integral_sign, text)
     has_multiple_signs = len(_INTEGRAL_SIGN.findall(text)) > 1
     try:
-        expr = parse_latex(text, strict=has_multiple_signs)
+        expr = parse_derivative_latex(text, strict=has_multiple_signs)
     except Exception as exc:  # antlr raises a variety of exception types
         raise ParseError(f"could not parse '{text}': {exc}") from exc
     if isinstance(expr, sp.Integral) and len(expr.limits) > 1:
@@ -84,10 +91,12 @@ def parse(latex: str, variable: str = "x") -> Parsed:
             raise ParseError("write one differential per integral sign, in integration order")
     expr = _fix_constants(expr)
     var = sp.Symbol(variable)
+    has_partial = r"\partial" in text
 
     if isinstance(expr, sp.Derivative):
-        v = expr.variables[0] if expr.variables else var
-        return Parsed(expr=expr, inner=expr.expr, topic=Topic.derivative, var=v)
+        v = expr.variable_count[0][0]
+        return Parsed(expr=expr, inner=expr.expr, topic=Topic.derivative, var=v,
+                      is_partial_derivative=has_partial)
     if isinstance(expr, sp.Integral):
         lim = expr.limits[0]
         v = lim[0]
@@ -97,6 +106,11 @@ def parse(latex: str, variable: str = "x") -> Parsed:
         lim = expr.limits[0]
         return Parsed(expr=expr, inner=expr.function, topic=Topic.series, var=var,
                       limits=(lim[1], lim[2]), index=lim[0])
+    if has_partial:
+        if isinstance(expr, sp.Expr) and expr.has(sp.Derivative):
+            return Parsed(expr=expr, inner=expr, topic=Topic.derivative, var=var,
+                          is_partial_derivative=True)
+        raise ParseError("expected an expression with a partial derivative")
     if has_multiple_signs and any(len(node.limits) > 1 for node in expr.atoms(sp.Integral)):
         raise ParseError("write the iterated integral as a standalone expression")
     # A bare expression: treat as "differentiate this" only if the caller says so.
