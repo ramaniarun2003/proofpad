@@ -5,8 +5,8 @@ import sympy as sp
 from app.models import Topic
 from app.services.latex_norm import normalize
 from app.services.steps import solve
-from app.services.symbolic import parse
-from app.services.verify import verify
+from app.services.symbolic import ParseError, parse
+from app.services.verify import verify, verify_latex_steps
 
 x = sp.Symbol("x")
 
@@ -63,6 +63,43 @@ def test_definite_integral_value():
     assert sp.simplify(sol.answer - sp.sin(1)) == 0
 
 
+@pytest.mark.parametrize("latex, order, expected", [
+    (r"\int_0^1\int_0^x xy\,dy\,dx", ("y", "x"), sp.Rational(1, 8)),
+    (r"\int_0^1\int_0^x\int_0^y xyz\,dz\,dy\,dx", ("z", "y", "x"), sp.Rational(1, 48)),
+    (r"\iint xy\,dx\,dy", ("x", "y"), x**2 * sp.Symbol("y")**2 / 4),
+    (r"\iiint 1\,\mathrm{d}z\,\mathrm{d}y\,\mathrm{d}x", ("z", "y", "x"), x * sp.Symbol("y") * sp.Symbol("z")),
+    (r"\int \int_0^1 xy\,dy\,dx", ("y", "x"), x**2 / 4),
+    (r"\int_0^\pi\left[\int_0^1 r\sin(\theta)\,dr\right]\,d\theta", ("r", "theta"), 1),
+    (r"\int_0^1\int_0^x\frac{1}{1+y^2}\,dy\,dx", ("y", "x"), sp.pi / 4 - sp.log(2) / 2),
+])
+def test_iterated_integrals_evaluate_in_differential_order(latex, order, expected):
+    p = parse(latex)
+    topic, sol = solve(p, Topic.unknown)
+    assert topic == Topic.integral
+    assert tuple(var.name for var in p.expr.variables) == order
+    assert sol.answer == expected
+    assert len(sol.steps) == len(order)
+    assert sol.steps[0].before == p.expr
+    for i, step in enumerate(sol.steps[:-1], start=1):
+        assert step.after == sol.steps[i].before
+        assert step.after.limits == p.expr.limits[i:]
+    assert sol.steps[-1].after == expected
+    result = verify(p, topic, sol)
+    assert result.verified, result.details
+    result = verify_latex_steps(p, topic, [(step.rule, sp.latex(step.after)) for step in sol.steps])
+    assert result.verified, result.details
+
+
+@pytest.mark.parametrize("latex", [
+    r"\int_0^1\int_0^x xy\,dy",
+    r"\int_0^1\int_0^1 x\,dx\,dy\,dz",
+    r"\iint_D xy\,dx\,dy",
+])
+def test_iterated_integrals_reject_missing_or_ambiguous_notation(latex):
+    with pytest.raises(ParseError):
+        parse(latex)
+
+
 @pytest.mark.parametrize("latex, verdict, rule", [
     (r"\sum_{n=1}^{\infty} \frac{1}{n^2}", "converges", "p-series"),
     (r"\sum_{n=1}^{\infty} \frac{1}{\sqrt{n}}", "diverges", "p-series"),
@@ -97,6 +134,5 @@ def test_verifier_catches_a_wrong_step():
 
 
 def test_parse_error_on_garbage():
-    from app.services.symbolic import ParseError
     with pytest.raises(ParseError):
         parse(r"\frac{d}{dx} \int")

@@ -14,6 +14,9 @@ def solve(p: Parsed, topic: Topic) -> tuple[Topic, Solution]:
     if topic == Topic.derivative:
         return topic, derivative.generate(p.inner, p.var)
     if topic == Topic.integral:
+        iterated = p.iterated_integral
+        if iterated is not None:
+            return topic, integral.generate_iterated(iterated)
         return topic, integral.generate(p.inner, p.var, p.limits)
     if topic == Topic.series:
         if p.index is None or p.limits is None:

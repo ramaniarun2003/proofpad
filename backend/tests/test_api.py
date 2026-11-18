@@ -54,6 +54,26 @@ def test_solve_typed_problem_without_recognize(client):
     assert r.json()["answer_latex"] == r"\frac{1}{3}"
 
 
+def test_solve_and_reverify_triple_integral(client):
+    problem = {"session_id": "", "latex": r"\int_0^1\int_0^x\int_0^y xyz\,dz\,dy\,dx"}
+    r = client.post("/solve", json=problem)
+    assert r.status_code == 200, r.text
+    sol = r.json()
+    assert sol["topic"] == "integral"
+    assert sol["answer_latex"] == r"\frac{1}{48}"
+    assert sol["verified"] is True
+
+    steps = sol["steps"]
+    r = client.post("/verify", json={**problem, "steps": steps})
+    assert r.status_code == 200, r.text
+    assert r.json()["verified"] is True
+
+    steps[0]["after_latex"] = r"\int_0^1\int_0^x x y^3\,dy\,dx"
+    r = client.post("/verify", json={**problem, "steps": steps})
+    assert r.status_code == 200, r.text
+    assert r.json()["verified"] is False and r.json()["mismatch_at"] == 0
+
+
 def test_solve_rejects_unparseable_latex(client):
     r = client.post("/solve", json={"session_id": "", "latex": r"\frac{d}{dx} \int", "topic": "unknown"})
     assert r.status_code == 422

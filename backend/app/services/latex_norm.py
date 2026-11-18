@@ -16,6 +16,7 @@ _REPLACEMENTS: list[tuple[str, str]] = [
     (r"\\displaystyle", ""),
     (r"\\mathrm\{d\}", "d"),
     (r"\\operatorname\{d\}", "d"),
+    (r"\\operatorname\{a(sin|cos|tan|csc|sec|cot)\}", r"\\arc\1"),
     (r"\\cdot", " * "),
     (r"\\times", " * "),
     (r"\\ln", r"\\log"),          # SymPy's parser reads \log as natural log

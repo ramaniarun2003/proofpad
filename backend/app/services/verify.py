@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
+from itertools import takewhile
 
 import sympy as sp
 
 from ..models import Topic
 from .steps.base import Solution, StepRec
-from .symbolic import Parsed
+from .symbolic import Parsed, ParseError, parse
 
 N_SAMPLES = 6
 TOL = 1e-6
@@ -27,13 +28,15 @@ class VerifyResult:
     details: list[str]
 
 
-def equivalent(a: sp.Basic, b: sp.Basic, x: sp.Symbol, modulo_constant: bool = False) -> bool:
+def equivalent(a: sp.Basic, b: sp.Basic, antiderivative_vars: tuple[sp.Symbol, ...] = ()) -> bool:
     """Symbolic check first; numeric sampling as a fallback when simplify() cannot decide."""
     a = a.doit()
     b = b.doit()
+    if a == b and not a.has(sp.nan):
+        return True
     diff = a - b
-    if modulo_constant:
-        diff = sp.diff(diff, x)
+    if antiderivative_vars:
+        diff = sp.diff(diff, *antiderivative_vars)
     try:
         if sp.simplify(diff) == 0:
             return True
@@ -62,6 +65,9 @@ def _truth(p: Parsed, topic: Topic):
     if topic == Topic.derivative:
         return sp.diff(p.inner, p.var)
     if topic == Topic.integral:
+        iterated = p.iterated_integral
+        if iterated is not None:
+            return sp.integrate(iterated.function, *iterated.limits)
         return sp.integrate(p.inner, (p.var, *p.limits) if p.limits else p.var)
     if topic == Topic.series:
         try:
@@ -85,15 +91,27 @@ def verify(p: Parsed, topic: Topic, sol: Solution) -> VerifyResult:
         ok = sol.verdict == truth
         return VerifyResult(ok, None if ok else len(sol.steps) - 1, [f"SymPy: {truth}"])
 
-    modulo_c = topic == Topic.integral and p.limits is None
+    iterated = p.iterated_integral if topic == Topic.integral else None
+    final_vars = ()
+    if iterated is not None:
+        # Only the outer indefinite integrations can be undone by taking
+        # derivatives of the final result.
+        outer_indefinite = takewhile(lambda limit: len(limit) == 1, reversed(iterated.limits))
+        final_vars = tuple(limit[0] for limit in outer_indefinite)
+    elif topic == Topic.integral and p.limits is None:
+        final_vars = (p.var,)
+
     for i, st in enumerate(sol.steps):
-        # For definite integrals only the final FTC step is a number; earlier steps are antiderivatives.
-        mod = modulo_c or (topic == Topic.integral and st.rule != "fundamental theorem of calculus")
-        target = truth if not (topic == Topic.integral and p.limits and mod) else sp.integrate(p.inner, p.var)
-        if not equivalent(st.after, target, p.var, modulo_constant=mod):
+        target = truth
+        step_vars = final_vars
+        # The single-variable generator shows antiderivatives before applying bounds.
+        if iterated is None and topic == Topic.integral and p.limits and st.rule != "fundamental theorem of calculus":
+            target = sp.integrate(p.inner, p.var)
+            step_vars = (p.var,)
+        if not equivalent(st.after, target, step_vars):
             details.append(f"step {i} ({st.rule}) is not equivalent to the direct result")
             return VerifyResult(False, i, details)
-    if sol.answer is not None and not equivalent(sol.answer, truth, p.var, modulo_constant=modulo_c):
+    if sol.answer is not None and not equivalent(sol.answer, truth, final_vars):
         return VerifyResult(False, len(sol.steps) - 1, ["final answer differs from the direct result"])
     details.append(f"direct result: {sp.latex(truth)}")
     return VerifyResult(True, None, details)
@@ -101,15 +119,11 @@ def verify(p: Parsed, topic: Topic, sol: Solution) -> VerifyResult:
 
 def verify_latex_steps(p: Parsed, topic: Topic, step_latex: list[tuple[str, str]]) -> VerifyResult:
     """Used by /verify when the client sends (possibly user-edited) LaTeX steps."""
-    from sympy.parsing.latex import parse_latex  # local import keeps antlr optional at import time
-
-    from .latex_norm import normalize
-
     recs: list[StepRec] = []
     for rule, after in step_latex:
         try:
-            expr = parse_latex(normalize(after)).subs(sp.Symbol("e"), sp.E)
-        except Exception as exc:
+            expr = parse(after).expr
+        except ParseError as exc:
             return VerifyResult(False, len(recs), [f"could not parse step {len(recs)}: {exc}"])
         recs.append(StepRec(rule=rule, before=expr, after=expr))
     sol = Solution(steps=recs, answer=recs[-1].after if recs else None)
