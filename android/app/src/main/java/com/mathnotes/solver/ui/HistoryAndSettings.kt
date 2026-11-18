@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -300,7 +301,7 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit) {
     var url by remember { mutableStateOf(vm.backendUrl) }
     var debugImages by remember { mutableStateOf(vm.debugImages) }
     var adaptiveThreshold by remember { mutableStateOf(vm.useAdaptiveThreshold) }
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxSize().systemBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Backend URL", style = MaterialTheme.typography.headlineSmall)
         Text("Laptop running uvicorn on the same Wi-Fi, e.g. http://192.168.1.42:8000/. Emulator → http://10.0.2.2:8000/.")
         OutlinedTextField(value = url, onValueChange = { url = it }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -318,6 +319,13 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit) {
             checked = adaptiveThreshold,
             onChange = { adaptiveThreshold = it; vm.useAdaptiveThreshold = it },
         )
+
+        Text("Onboarding", style = MaterialTheme.typography.titleMedium)
+        var welcomeReset by remember { mutableStateOf(false) }
+        OutlinedButton(
+            onClick = { vm.resetWelcome(); welcomeReset = true },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(if (welcomeReset) "Welcome screen will show next launch ✓" else "Show welcome screen again") }
 
         Button(onClick = { vm.setBackendUrl(url.trim()); onDone() }, modifier = Modifier.fillMaxWidth()) { Text("Save") }
     }

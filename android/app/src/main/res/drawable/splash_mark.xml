@@ -1,0 +1,25 @@
+<!--
+  ProofPad mark for the system splash: a STIX-style integral sign in cream with a
+  green verification check, drawn inside the 108dp adaptive-icon-safe canvas (the
+  content stays within the inner 72dp safe zone).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Integral sign: bottom-left hook, long S-spine, top-right hook. -->
+    <path
+        android:pathData="M42,80 C37,80 37,73 43,72 C52,69 50,41 54,34 C57,28 64,28 66,34"
+        android:strokeColor="#FBF8F1"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- Verification check, lower-right. -->
+    <path
+        android:pathData="M60,63 l6,7 l16,-19"
+        android:strokeColor="#1F7A3A"
+        android:strokeWidth="7.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
