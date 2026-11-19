@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Post-splash theme applied to the app window. Compose (NotepadTheme) draws
+      everything, so this only needs to be a no-action-bar shell. postSplashScreenTheme
+      swaps to this the instant Compose takes over, which avoids a white flash.
+    -->
+    <style name="Theme.ProofPad" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!--
+      The system splash shown for the half-second before Compose is up
+      (AndroidX SplashScreen API). Dark ink background with the integral-plus-check
+      mark centered; see res/drawable/splash_mark.xml.
+    -->
+    <style name="Theme.ProofPad.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_mark</item>
+        <item name="postSplashScreenTheme">@style/Theme.ProofPad</item>
+    </style>
+</resources>

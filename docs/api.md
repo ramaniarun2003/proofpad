@@ -36,6 +36,17 @@ verdict of that test (`converges` / `diverges` / `inconclusive`) and `answer_lat
 `422` when the LaTeX does not parse (message names the problem). `session_id` may be empty for a
 typed problem; the backend creates one.
 
+Partial derivatives use topic `derivative` and take their variables from the
+LaTeX. Write `\frac{\partial}{\partial x}(x^2y)` for a first derivative,
+`\frac{\partial^2}{\partial x^2}(x^2y)` for a repeated derivative, or
+`\frac{\partial^2}{\partial y\partial x}(x^2y)` to differentiate in `x` and then `y`.
+
+Double and triple integrals use topic `integral`. For integrals with bounds, write
+one `\int` per variable, as in `\int_0^1\int_0^x xy\,dy\,dx`. Give the differentials in
+innermost-to-outermost order. Indefinite integrals also accept `\iint` and `\iiint`
+with explicit differentials. The solver evaluates one variable per step and returns
+`422` if it cannot evaluate the integral symbolically.
+
 ## `POST /verify`
 Same shape as `/solve` plus `steps: [...]` (the user's edited chain). Returns
 `{"verified": bool, "mismatch_at": int|null, "details": [...]}`. Not supported for series.

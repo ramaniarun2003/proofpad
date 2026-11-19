@@ -49,8 +49,12 @@ import com.mathnotes.solver.ui.components.ruledPaper
 import com.mathnotes.solver.ui.theme.NotepadColors
 import com.mathnotes.solver.ui.theme.NotepadFonts
 
-/** Insert helpers mirroring the token row in the mockup; tapping appends the snippet. */
-private val LATEX_TOKENS = listOf("\\int", "\\frac{}{}", "^{}", "\\sqrt{}", "\\sin", "\\ln", "\\sum")
+/**
+ * Insert helpers mirroring the token row in the mockup; tapping appends the snippet.
+ * Includes the multivariable operators the solver accepts: \iint / \iiint for double and
+ * triple integrals, and \partial for partial derivatives (build ∂/∂x with \frac{\partial}{\partial x}).
+ */
+private val LATEX_TOKENS = listOf("\\int", "\\iint", "\\iiint", "\\partial", "\\frac{}{}", "^{}", "\\sqrt{}", "\\sin", "\\ln", "\\sum")
 
 /** Topic chip label → the canonical topic value the backend expects. */
 private val TOPIC_OPTIONS = listOf("Integrate" to "integral", "Differentiate" to "derivative", "Series" to "series")

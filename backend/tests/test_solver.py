@@ -5,10 +5,10 @@ import sympy as sp
 from app.models import Topic
 from app.services.latex_norm import normalize
 from app.services.steps import solve
-from app.services.symbolic import parse
-from app.services.verify import verify
+from app.services.symbolic import ParseError, parse
+from app.services.verify import verify, verify_latex_steps
 
-x = sp.Symbol("x")
+x, y = sp.symbols("x y")
 
 
 def run(latex, topic=Topic.unknown):
@@ -44,6 +44,48 @@ def test_derivatives_verified_with_expected_rules(latex, rules):
     assert sp.simplify(sol.answer - sp.diff(parse(latex).inner, x)) == 0
 
 
+@pytest.mark.parametrize("latex, variables, expected", [
+    (r"\frac{\partial}{\partial y}(x^2y + \sin(y))", (y,), x**2 + sp.cos(y)),
+    (r"\frac{\partial x^2y}{\partial x}", (x,), 2 * x * y),
+    (r"\frac{\partial}{\partial y}x^2", (y,), 0),
+    (r"\frac{\partial^2}{\partial x^2}(x^3y)", (x, x), 6 * x * y),
+    (r"\frac{\partial^3 x^3y^3}{\partial x^2\partial y}", (y, x, x), 18 * x * y**2),
+    (r"\frac{\partial}{\partial x}\frac{\partial}{\partial y}(x^2y^3)", (y, x), 6 * x * y**2),
+    (r"\frac{\partial^2}{\partial x\partial y}\frac{x}{1+y}", (y, x), -1 / (1 + y)**2),
+    (r"\frac{\partial^2}{\partial y\partial x}(x^2\cos(xy))",
+     (x, y), -x**2 * (x * y * sp.cos(x * y) + 3 * sp.sin(x * y))),
+])
+def test_partial_derivatives_keep_the_order_and_round_trip(latex, variables, expected):
+    p = parse(latex)
+    topic, sol = solve(p, Topic.unknown)
+
+    assert topic == Topic.derivative
+    assert p.expr.variables == variables
+    assert sp.simplify(sol.answer - expected) == 0
+    assert sol.steps[0].before == p.expr
+    assert all(a.after == b.before for a, b in zip(sol.steps, sol.steps[1:]))
+    result = verify(p, topic, sol)
+    assert result.verified, result.details
+    result = verify_latex_steps(
+        p, topic, [(step.rule, sol.format_latex(step.before), sol.format_latex(step.after)) for step in sol.steps],
+    )
+    assert result.verified, result.details
+
+
+def test_partial_derivative_with_indexed_variable():
+    topic, sol, result = run(r"\frac{\partial}{\partial x_1}(x_1^2x_2)")
+    assert topic == Topic.derivative
+    assert sol.answer_latex == r"2 x_{1} x_{2}"
+    assert result.verified, result.details
+
+
+def test_sum_of_partial_derivatives_is_evaluated():
+    topic, sol, result = run(r"\frac{\partial x^2}{\partial x}+\frac{\partial y^2}{\partial y}")
+    assert topic == Topic.derivative
+    assert sol.answer == 2 * x + 2 * y
+    assert result.verified, result.details
+
+
 @pytest.mark.parametrize("latex, rule", [
     (r"\int x e^{x} \, dx", "integration by parts"),
     (r"\int_{0}^{1} 2x\cos(x^2)\,dx", "u-substitution"),
@@ -61,6 +103,45 @@ def test_integrals_verified_with_expected_rule(latex, rule):
 def test_definite_integral_value():
     _, sol, _ = run(r"\int_{0}^{1} 2x\cos(x^2)\,dx")
     assert sp.simplify(sol.answer - sp.sin(1)) == 0
+
+
+@pytest.mark.parametrize("latex, order, expected", [
+    (r"\int_0^1\int_0^x xy\,dy\,dx", ("y", "x"), sp.Rational(1, 8)),
+    (r"\int_0^1\int_0^x\int_0^y xyz\,dz\,dy\,dx", ("z", "y", "x"), sp.Rational(1, 48)),
+    (r"\iint xy\,dx\,dy", ("x", "y"), x**2 * sp.Symbol("y")**2 / 4),
+    (r"\iiint 1\,\mathrm{d}z\,\mathrm{d}y\,\mathrm{d}x", ("z", "y", "x"), x * sp.Symbol("y") * sp.Symbol("z")),
+    (r"\int \int_0^1 xy\,dy\,dx", ("y", "x"), x**2 / 4),
+    (r"\int_0^\pi\left[\int_0^1 r\sin(\theta)\,dr\right]\,d\theta", ("r", "theta"), 1),
+    (r"\int_0^1\int_0^x\frac{1}{1+y^2}\,dy\,dx", ("y", "x"), sp.pi / 4 - sp.log(2) / 2),
+])
+def test_iterated_integrals_evaluate_in_differential_order(latex, order, expected):
+    p = parse(latex)
+    topic, sol = solve(p, Topic.unknown)
+    assert topic == Topic.integral
+    assert tuple(var.name for var in p.expr.variables) == order
+    assert sol.answer == expected
+    assert len(sol.steps) == len(order)
+    assert sol.steps[0].before == p.expr
+    for i, step in enumerate(sol.steps[:-1], start=1):
+        assert step.after == sol.steps[i].before
+        assert step.after.limits == p.expr.limits[i:]
+    assert sol.steps[-1].after == expected
+    result = verify(p, topic, sol)
+    assert result.verified, result.details
+    result = verify_latex_steps(
+        p, topic, [(step.rule, sp.latex(step.before), sp.latex(step.after)) for step in sol.steps],
+    )
+    assert result.verified, result.details
+
+
+@pytest.mark.parametrize("latex", [
+    r"\int_0^1\int_0^x xy\,dy",
+    r"\int_0^1\int_0^1 x\,dx\,dy\,dz",
+    r"\iint_D xy\,dx\,dy",
+])
+def test_iterated_integrals_reject_missing_or_ambiguous_notation(latex):
+    with pytest.raises(ParseError):
+        parse(latex)
 
 
 @pytest.mark.parametrize("latex, verdict, rule", [
@@ -97,6 +178,5 @@ def test_verifier_catches_a_wrong_step():
 
 
 def test_parse_error_on_garbage():
-    from app.services.symbolic import ParseError
     with pytest.raises(ParseError):
         parse(r"\frac{d}{dx} \int")

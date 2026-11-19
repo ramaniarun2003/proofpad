@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -57,7 +58,7 @@ fun GalleryCropScreen(vm: SolverViewModel, onCropped: () -> Unit, onCancel: () -
     var right by remember { mutableStateOf(0.9f) }
     var bottom by remember { mutableStateOf(0.7f) }
 
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxSize().systemBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Crop to the expression", style = MaterialTheme.typography.headlineSmall)
         Text("Drag the corners to frame one expression.", style = MaterialTheme.typography.bodyMedium)
 
