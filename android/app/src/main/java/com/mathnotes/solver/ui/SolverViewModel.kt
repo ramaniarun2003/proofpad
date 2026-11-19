@@ -221,6 +221,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
                 val verifyResp = repo.verify(s.sessionId, s.latex, "unknown", stepObjects)
+                repo.saveVerification(s.sessionId, s.latex, s.topic, stepObjects, verifyResp.verified, verifyResp.mismatchAt)
 
                 val solveResp = SolveResponse(
                     sessionId = s.sessionId,
