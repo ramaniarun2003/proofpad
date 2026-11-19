@@ -68,8 +68,29 @@ class SolverRepository(context: Context) {
         resp
     }
 
-    suspend fun verify(sessionId: String, latex: String, topic: String, steps: List<Step>): VerifyResponse =
+    suspend fun verify(sessionId: String, latex: String, topic: String = "unknown", steps: List<Step>): VerifyResponse =
         withContext(Dispatchers.IO) { api.verify(VerifyRequest(sessionId = sessionId, latex = latex, topic = topic, steps = steps)) }
+
+    suspend fun saveVerification(
+        sessionId: String,
+        latex: String,
+        topic: String,
+        steps: List<Step>,
+        verified: Boolean,
+        mismatchAt: Int?,
+    ) = withContext(Dispatchers.IO) {
+        val existing = dao.get(sessionId) ?: SessionEntity(sessionId = sessionId)
+        dao.upsert(
+            existing.copy(
+                confirmedLatex = latex,
+                topic = topic,
+                stepsJson = stepsAdapter.toJson(steps),
+                answerLatex = steps.lastOrNull()?.afterLatex ?: latex,
+                verified = verified,
+                mismatchAt = mismatchAt,
+            )
+        )
+    }
 
     suspend fun backendReachable(): Boolean = withContext(Dispatchers.IO) {
         runCatching { api.health().status == "ok" }.getOrDefault(false)

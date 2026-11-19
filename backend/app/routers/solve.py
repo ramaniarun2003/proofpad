@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,6 +14,7 @@ from ..services.symbolic import ParseError, parse
 from ..services.verify import verify, verify_latex_steps
 
 router = APIRouter(tags=["solve"])
+logger = logging.getLogger(__name__)
 
 
 def _get_or_create(db: Session, session_id: str) -> SessionRow:
@@ -56,6 +58,8 @@ def solve(req: SolveRequest, db: Session = Depends(get_db)):
 
 @router.post("/verify", response_model=VerifyResponse)
 def verify_endpoint(req: VerifyRequest, db: Session = Depends(get_db)):
+    request_data = req.model_dump(mode="json")
+    logger.info("verify request: %s", request_data)
     try:
         parsed = parse(req.latex, req.variable)
     except ParseError as exc:
@@ -63,9 +67,15 @@ def verify_endpoint(req: VerifyRequest, db: Session = Depends(get_db)):
     topic = parsed.topic if req.topic in (Topic.unknown, None) else req.topic
     if topic == Topic.series:
         raise HTTPException(422, "edited series steps cannot be re-verified; re-run /solve")
-    vr = verify_latex_steps(parsed, topic, [(s.rule, s.after_latex) for s in req.steps])
+    vr = verify_latex_steps(
+        parsed,
+        topic,
+        [(s.rule, s.before_latex, s.after_latex) for s in req.steps],
+    )
     row = db.get(SessionRow, req.session_id)
     if row is not None:
         row.log("verify", verified=vr.verified, mismatch_at=vr.mismatch_at, edited=True)
         db.commit()
-    return VerifyResponse(verified=vr.verified, mismatch_at=vr.mismatch_at, details=vr.details)
+    response = VerifyResponse(verified=vr.verified, mismatch_at=vr.mismatch_at, details=vr.details)
+    logger.info("verify response: %s", response.model_dump(mode="json"))
+    return response

@@ -120,6 +120,29 @@ def test_verify_edited_steps_flags_the_bad_one(client):
     assert r.json()["verified"] is False and r.json()["mismatch_at"] == 1
 
 
+def test_verify_edited_integral_transitions(client):
+    steps = [
+        {"index": 0, "rule": "linearity", "before_latex": r"\int\left(5 x^{3}+2 \cos x\right) d x",
+         "after_latex": r"\int 5 x^{3} d x+\int 2 \cos x d x", "note": ""},
+        {"index": 1, "rule": "constant multiple",
+         "before_latex": r"\int 5 x^{3} d x+\int 2 \cos x d x",
+         "after_latex": r"5\int x^{3} d x+2\int \cos x d x", "note": ""},
+        {"index": 2, "rule": "table",
+         "before_latex": r"5\int x^{3} d x+2\int \cos x d x",
+         "after_latex": r"5\cdot\frac{x^{4}}{4}+2\cdot\sin x+C", "note": ""},
+        {"index": 3, "rule": "simplify",
+         "before_latex": r"5\cdot\frac{x^{4}}{4}+2\cdot\sin x+C",
+         "after_latex": r"\frac{5 x^{4}}{4}+2\sin x+C", "note": ""},
+    ]
+    r = client.post("/verify", json={
+        "session_id": "",
+        "latex": r"\int\left(5 x^{3}+2 \cos x\right) d x",
+        "steps": steps,
+    })
+    assert r.status_code == 200, r.text
+    assert r.json()["verified"] is True, r.text
+
+
 def test_oversized_image_rejected(client):
     big = io.BytesIO(b"\x00" * (3 * 1024 * 1024))
     r = client.post("/recognize", files={"image": ("page.jpg", big, "image/jpeg")})

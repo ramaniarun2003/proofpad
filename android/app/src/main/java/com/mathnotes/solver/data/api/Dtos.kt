@@ -46,7 +46,7 @@ data class SolveResponse(
 data class VerifyRequest(
     @Json(name = "session_id") val sessionId: String,
     val latex: String,
-    val topic: String,
+    val topic: String = "unknown",
     val variable: String = "x",
     val steps: List<Step>,
 )

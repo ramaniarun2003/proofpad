@@ -1,13 +1,14 @@
 """Independent verification.
 
 The step generator and this module must not share code paths: the truth is
-always computed directly with SymPy (diff / integrate / is_convergent), and
-every step in the chain is compared against it. `mismatch_at` is the index
-of the first step whose result is NOT equivalent to the truth.
+always computed directly with SymPy (diff / integrate / is_convergent).
+Generated solutions compare each step with the direct result; user-edited
+solutions compare each transition and then compare the final result.
 """
 from __future__ import annotations
 
 import random
+import re
 from dataclasses import dataclass
 from itertools import takewhile
 
@@ -15,7 +16,7 @@ import sympy as sp
 
 from ..models import Topic
 from .steps.base import Solution, StepRec
-from .symbolic import Parsed, ParseError, parse
+from .symbolic import Parsed, parse
 
 N_SAMPLES = 6
 TOL = 1e-6
@@ -117,14 +118,48 @@ def verify(p: Parsed, topic: Topic, sol: Solution) -> VerifyResult:
     return VerifyResult(True, None, details)
 
 
-def verify_latex_steps(p: Parsed, topic: Topic, step_latex: list[tuple[str, str]]) -> VerifyResult:
+def verify_latex_steps(p: Parsed, topic: Topic,
+                       step_latex: list[tuple[str, str, str]]) -> VerifyResult:
     """Used by /verify when the client sends (possibly user-edited) LaTeX steps."""
-    recs: list[StepRec] = []
-    for rule, after in step_latex:
+    if not step_latex:
+        return VerifyResult(False, 0, ["no steps were provided"])
+
+    def parse_step(text: str, index: int) -> sp.Basic | VerifyResult:
         try:
-            expr = parse(after).expr
-        except ParseError as exc:
-            return VerifyResult(False, len(recs), [f"could not parse step {len(recs)}: {exc}"])
-        recs.append(StepRec(rule=rule, before=expr, after=expr))
-    sol = Solution(steps=recs, answer=recs[-1].after if recs else None)
+            # Use the project parser (the same one that powers /solve) so multivariable
+            # integrals and partial derivatives round-trip. Neither that parser nor SymPy's
+            # binds ``\int f dx + \int g dx`` as separate terms, so split a sum/difference of
+            # integrals and parse each term on its own before adding them back.
+            if text.count(r"\int") > 1 and re.search(r"[+-]\s*(?:\d+(?:\.\d+)?\s*)?\\int", text):
+                terms = re.split(r"(?=[+-]\s*(?:\d+(?:\.\d+)?\s*)?\\int)", text)
+                return sp.Add(*[parse(term.lstrip("+ ")).expr for term in terms if term.strip()])
+            return parse(text).expr
+        except Exception as exc:
+            return VerifyResult(False, index, [f"could not parse step {index}: {exc}"])
+
+    recs: list[StepRec] = []
+    modulo_c = topic == Topic.integral and p.limits is None
+    expected_before = p.expr
+    for i, (rule, before, after) in enumerate(step_latex):
+        parsed_before = parse_step(before, i)
+        if isinstance(parsed_before, VerifyResult):
+            return parsed_before
+        parsed_after = parse_step(after, i)
+        if isinstance(parsed_after, VerifyResult):
+            return parsed_after
+
+        # Compare each transition modulo an additive constant for indefinite integrals.
+        # verify()'s equivalent() now takes the antiderivative vars to differentiate by
+        # (Rick's multivariable change) instead of a (symbol, modulo_constant) pair.
+        mod = modulo_c or (topic == Topic.integral and rule != "fundamental theorem of calculus")
+        anti_vars = (p.var,) if mod else ()
+        if not equivalent(parsed_before, expected_before, anti_vars):
+            return VerifyResult(False, i, [f"step {i} ({rule}) starts from an unexpected expression"])
+        if not equivalent(parsed_before, parsed_after, anti_vars):
+            return VerifyResult(False, i, [f"step {i} ({rule}) changes the value incorrectly"])
+
+        recs.append(StepRec(rule=rule, before=parsed_before, after=parsed_after))
+        expected_before = parsed_after
+
+    sol = Solution(steps=recs, answer=recs[-1].after)
     return verify(p, topic, sol)

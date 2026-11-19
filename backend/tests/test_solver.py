@@ -66,7 +66,9 @@ def test_partial_derivatives_keep_the_order_and_round_trip(latex, variables, exp
     assert all(a.after == b.before for a, b in zip(sol.steps, sol.steps[1:]))
     result = verify(p, topic, sol)
     assert result.verified, result.details
-    result = verify_latex_steps(p, topic, [(step.rule, sol.format_latex(step.after)) for step in sol.steps])
+    result = verify_latex_steps(
+        p, topic, [(step.rule, sol.format_latex(step.before), sol.format_latex(step.after)) for step in sol.steps],
+    )
     assert result.verified, result.details
 
 
@@ -126,7 +128,9 @@ def test_iterated_integrals_evaluate_in_differential_order(latex, order, expecte
     assert sol.steps[-1].after == expected
     result = verify(p, topic, sol)
     assert result.verified, result.details
-    result = verify_latex_steps(p, topic, [(step.rule, sp.latex(step.after)) for step in sol.steps])
+    result = verify_latex_steps(
+        p, topic, [(step.rule, sp.latex(step.before), sp.latex(step.after)) for step in sol.steps],
+    )
     assert result.verified, result.details
 
 

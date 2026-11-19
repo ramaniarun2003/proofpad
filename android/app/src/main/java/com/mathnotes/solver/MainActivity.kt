@@ -76,12 +76,12 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("review") {
-                            ReviewScreen(vm, onSolved = { nav.navigate("results") },
+                            ReviewScreen(vm, onSolved = { nav.navigate("results") { popUpTo("capture") { inclusive = false } } },
                                 onRetake = { nav.popBackStack("capture", inclusive = false) })
                         }
                         composable("results") {
                             ResultsScreen(vm,
-                                onNewProblem = { nav.popBackStack("capture", inclusive = false) },
+                                onNewProblem = { vm.reset(); nav.popBackStack("capture", inclusive = false) },
                                 onSaveToGallery = { nav.navigate("saveToGallery") })
                         }
                         composable("saveToGallery") {

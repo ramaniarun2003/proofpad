@@ -7,12 +7,14 @@ import androidx.lifecycle.viewModelScope
 import com.mathnotes.solver.data.api.ApiClient
 import com.mathnotes.solver.data.WelcomePrefs
 import com.mathnotes.solver.data.api.SolveResponse
+import com.mathnotes.solver.data.api.Step
 import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.data.db.FolderWithCount
 import com.mathnotes.solver.data.db.SessionEntity
 import com.mathnotes.solver.data.repository.GalleryRepository
 import com.mathnotes.solver.data.repository.SolverRepository
 import com.mathnotes.solver.image.CropSpec
+import com.mathnotes.solver.image.LatexStepSplitter
 import com.mathnotes.solver.image.Preprocessor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +42,8 @@ data class SolverUiState(
     val topic: String = "unknown",
     val result: SolveResponse? = null,
     val difficulty: Difficulty? = null,
+    val userSteps: List<String> = emptyList(),
+    val isVerifyMode: Boolean = false,
 )
 
 /** Active filters for the folder-detail screen (folderId < 0 means "no folder open"). */
@@ -159,14 +163,82 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 _state.update { it.copy(imageFile = clean, status = "Recognizing…") }
                 val rec = repo.recognize(clean)
+                val rawLatex = rec.latex
+                val cleaned = rawLatex.replace(Regex("\\\\begin\\{aligned\\}|\\\\end\\{aligned\\}|\\\\begin\\{align\\*\\}|\\\\end\\{align\\*\\}"), "").trim()
+                val rawLines = cleaned.split(Regex("\\\\\\\\|\n")).map { it.replace("&", "").trim() }.filter { it.isNotEmpty() }
+
+                val line1 = rawLines.firstOrNull() ?: rawLatex.trim()
+                val originalProblem = if (line1.contains("=")) line1.split("=", limit = 2)[0].trim() else line1
+
+                val stepExpressions = mutableListOf<String>()
+                rawLines.forEachIndexed { index, line ->
+                    if (line.contains("=")) {
+                        val rhs = line.split("=", limit = 2)[1].trim()
+                        if (rhs.isNotEmpty()) stepExpressions.add(rhs)
+                    } else if (line.startsWith("=")) {
+                        val rhs = line.substring(1).trim()
+                        if (rhs.isNotEmpty()) stepExpressions.add(rhs)
+                    } else if (index > 0) {
+                        stepExpressions.add(line)
+                    }
+                }
+                val finalSteps = if (stepExpressions.isNotEmpty()) stepExpressions else LatexStepSplitter.splitIntoSteps(rawLatex)
+                val topicToUse = if (topicHint != "unknown") topicHint else rec.topicGuess
+
                 _state.update {
                     it.copy(
                         busy = false, status = "",
-                        sessionId = rec.sessionId, latex = rec.latex,
-                        confidence = rec.confidence, lowConfidence = rec.lowConfidence,
-                        topic = if (topicHint != "unknown") topicHint else rec.topicGuess,
+                        sessionId = rec.sessionId,
+                        latex = originalProblem,
+                        confidence = rec.confidence,
+                        lowConfidence = rec.lowConfidence,
+                        topic = topicToUse,
+                        userSteps = finalSteps,
                     )
                 }
+            } catch (e: Exception) {
+                _state.update { it.copy(busy = false, status = "", error = describe(e)) }
+            }
+        }
+    }
+
+    fun addUserStep() = _state.update { it.copy(userSteps = it.userSteps + "") }
+    fun updateUserStep(index: Int, text: String) = _state.update {
+        it.copy(userSteps = it.userSteps.toMutableList().apply { if (index in indices) set(index, text) })
+    }
+    fun removeUserStep(index: Int) = _state.update {
+        it.copy(userSteps = it.userSteps.toMutableList().apply { if (index in indices) removeAt(index) })
+    }
+
+    fun verify() {
+        val s = _state.value
+        _state.update { it.copy(busy = true, status = "Verifying steps…", error = null) }
+        viewModelScope.launch {
+            try {
+                val stepObjects = s.userSteps.filter { it.isNotBlank() }.mapIndexed { index, expr ->
+                    val rhs = if (expr.contains("=")) expr.split("=", limit = 2)[1].trim() else expr.trim()
+                    Step(
+                        index = index,
+                        rule = "user step ${index + 1}",
+                        beforeLatex = if (index == 0) s.latex else s.userSteps[index - 1],
+                        afterLatex = rhs,
+                        note = "",
+                    )
+                }
+                val verifyResp = repo.verify(s.sessionId, s.latex, "unknown", stepObjects)
+                repo.saveVerification(s.sessionId, s.latex, s.topic, stepObjects, verifyResp.verified, verifyResp.mismatchAt)
+
+                val solveResp = SolveResponse(
+                    sessionId = s.sessionId,
+                    topic = s.topic,
+                    steps = stepObjects,
+                    answerLatex = stepObjects.lastOrNull()?.afterLatex ?: s.latex,
+                    verified = verifyResp.verified,
+                    mismatchAt = verifyResp.mismatchAt,
+                    details = verifyResp.details,
+                )
+
+                _state.update { it.copy(busy = false, status = "", result = solveResp) }
             } catch (e: Exception) {
                 _state.update { it.copy(busy = false, status = "", error = describe(e)) }
             }
