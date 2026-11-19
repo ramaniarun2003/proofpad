@@ -148,6 +148,27 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
                     }
                 }
 
+                NotepadLabel("Your step-by-step working:")
+                state.userSteps.forEachIndexed { index, stepText ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = stepText,
+                            onValueChange = { vm.updateUserStep(index, it) },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("Step ${index + 1} LaTeX") },
+                            textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = NotepadColors.Ink),
+                            shape = RoundedCornerShape(8.dp),
+                            minLines = 1,
+                        )
+                        if (state.userSteps.size > 1) {
+                            OutlinedButton(onClick = { vm.removeUserStep(index) }) { Text("X") }
+                        }
+                    }
+                }
+                Button(onClick = vm::addUserStep, modifier = Modifier.fillMaxWidth()) {
+                    Text("+ Add Step")
+                }
+
                 if (state.lowConfidence) {
                     StickyNote(rotationDeg = 1f) {
                         Text(
@@ -171,12 +192,12 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
             ) { Text("Retake", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
 
             Button(
-                onClick = vm::solve,
-                enabled = state.latex.isNotBlank(),
+                onClick = vm::verify,
+                enabled = state.latex.isNotBlank() && state.userSteps.any { it.isNotBlank() },
                 modifier = Modifier.weight(1.4f).height(48.dp),
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),
-            ) { Text("Looks right, solve it", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
+            ) { Text("Check my steps", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
         }
     }
 }

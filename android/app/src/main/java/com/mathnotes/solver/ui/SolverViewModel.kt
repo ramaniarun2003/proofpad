@@ -158,11 +158,11 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 _state.update { it.copy(imageFile = clean, status = "Recognizing…") }
                 val rec = repo.recognize(clean)
-                val raw = rec.latex
-                val cleaned = raw.replace(Regex("\\\\begin\\{aligned\\}|\\\\end\\{aligned\\}|\\\\begin\\{align\\*\\}|\\\\end\\{align\\*\\}"), "").trim()
+                val rawLatex = rec.latex
+                val cleaned = rawLatex.replace(Regex("\\\\begin\\{aligned\\}|\\\\end\\{aligned\\}|\\\\begin\\{align\\*\\}|\\\\end\\{align\\*\\}"), "").trim()
                 val rawLines = cleaned.split(Regex("\\\\\\\\|\n")).map { it.replace("&", "").trim() }.filter { it.isNotEmpty() }
 
-                val line1 = rawLines.firstOrNull() ?: raw.trim()
+                val line1 = rawLines.firstOrNull() ?: rawLatex.trim()
                 val originalProblem = if (line1.contains("=")) line1.split("=", limit = 2)[0].trim() else line1
 
                 val stepExpressions = mutableListOf<String>()
@@ -177,45 +177,62 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                         stepExpressions.add(line)
                     }
                 }
-                val finalSteps = if (stepExpressions.isNotEmpty()) stepExpressions else LatexStepSplitter.splitIntoSteps(raw)
+                val finalSteps = if (stepExpressions.isNotEmpty()) stepExpressions else LatexStepSplitter.splitIntoSteps(rawLatex)
+                val topicToUse = if (topicHint != "unknown") topicHint else rec.topicGuess
 
-                val stepObjects = finalSteps.mapIndexed { index, expr ->
+                _state.update {
+                    it.copy(
+                        busy = false, status = "",
+                        sessionId = rec.sessionId,
+                        latex = originalProblem,
+                        confidence = rec.confidence,
+                        lowConfidence = rec.lowConfidence,
+                        topic = topicToUse,
+                        userSteps = finalSteps,
+                    )
+                }
+            } catch (e: Exception) {
+                _state.update { it.copy(busy = false, status = "", error = describe(e)) }
+            }
+        }
+    }
+
+    fun addUserStep() = _state.update { it.copy(userSteps = it.userSteps + "") }
+    fun updateUserStep(index: Int, text: String) = _state.update {
+        it.copy(userSteps = it.userSteps.toMutableList().apply { if (index in indices) set(index, text) })
+    }
+    fun removeUserStep(index: Int) = _state.update {
+        it.copy(userSteps = it.userSteps.toMutableList().apply { if (index in indices) removeAt(index) })
+    }
+
+    fun verify() {
+        val s = _state.value
+        _state.update { it.copy(busy = true, status = "Verifying steps…", error = null) }
+        viewModelScope.launch {
+            try {
+                val stepObjects = s.userSteps.filter { it.isNotBlank() }.mapIndexed { index, expr ->
+                    val rhs = if (expr.contains("=")) expr.split("=", limit = 2)[1].trim() else expr.trim()
                     Step(
                         index = index,
                         rule = "user step ${index + 1}",
-                        beforeLatex = if (index == 0) originalProblem else finalSteps[index - 1],
-                        afterLatex = expr,
+                        beforeLatex = if (index == 0) s.latex else s.userSteps[index - 1],
+                        afterLatex = rhs,
                         note = "",
                     )
                 }
-
-                val splitSteps = LatexStepSplitter.splitIntoSteps(raw)
-
-                val topicToUse = if (topicHint != "unknown") topicHint else rec.topicGuess
-
-                _state.update { it.copy(status = "Verifying steps…") }
-                val verifyResp = repo.verify(rec.sessionId, originalProblem, "unknown", stepObjects)
+                val verifyResp = repo.verify(s.sessionId, s.latex, "unknown", stepObjects)
 
                 val solveResp = SolveResponse(
-                    sessionId = rec.sessionId,
-                    topic = topicToUse,
+                    sessionId = s.sessionId,
+                    topic = s.topic,
                     steps = stepObjects,
-                    answerLatex = stepObjects.lastOrNull()?.afterLatex ?: originalProblem,
+                    answerLatex = stepObjects.lastOrNull()?.afterLatex ?: s.latex,
                     verified = verifyResp.verified,
                     mismatchAt = verifyResp.mismatchAt,
                     details = verifyResp.details,
                 )
 
-                _state.update {
-                    it.copy(
-                        busy = false, status = "",
-                        sessionId = rec.sessionId, latex = originalProblem,
-                        confidence = rec.confidence, lowConfidence = rec.lowConfidence,
-                        topic = topicToUse,
-                        result = solveResp,
-                        userSteps = splitSteps,
-                    )
-                }
+                _state.update { it.copy(busy = false, status = "", result = solveResp) }
             } catch (e: Exception) {
                 _state.update { it.copy(busy = false, status = "", error = describe(e)) }
             }
