@@ -1,13 +1,14 @@
 """Independent verification.
 
 The step generator and this module must not share code paths: the truth is
-always computed directly with SymPy (diff / integrate / is_convergent), and
-every step in the chain is compared against it. `mismatch_at` is the index
-of the first step whose result is NOT equivalent to the truth.
+always computed directly with SymPy (diff / integrate / is_convergent).
+Generated solutions compare each step with the direct result; user-edited
+solutions compare each transition and then compare the final result.
 """
 from __future__ import annotations
 
 import random
+import re
 from dataclasses import dataclass
 
 import sympy as sp
@@ -99,18 +100,53 @@ def verify(p: Parsed, topic: Topic, sol: Solution) -> VerifyResult:
     return VerifyResult(True, None, details)
 
 
-def verify_latex_steps(p: Parsed, topic: Topic, step_latex: list[tuple[str, str]]) -> VerifyResult:
+def verify_latex_steps(p: Parsed, topic: Topic,
+                       step_latex: list[tuple[str, str, str]]) -> VerifyResult:
     """Used by /verify when the client sends (possibly user-edited) LaTeX steps."""
     from sympy.parsing.latex import parse_latex  # local import keeps antlr optional at import time
 
     from .latex_norm import normalize
 
-    recs: list[StepRec] = []
-    for rule, after in step_latex:
+    if not step_latex:
+        return VerifyResult(False, 0, ["no steps were provided"])
+
+    def parse_step(text: str, index: int) -> sp.Basic | VerifyResult:
+        normalized = normalize(text)
         try:
-            expr = parse_latex(normalize(after)).subs(sp.Symbol("e"), sp.E)
+            # SymPy can parse ``\int f dx+\int g dx`` as one nested integral.
+            # Parse the separate terms independently when multiple integrals
+            # appear in a user-edited step.
+            if normalized.count(r"\int") > 1:
+                terms = re.split(r"(?=[+-]\s*(?:\d+(?:\.\d+)?\s*)?\\int)", normalized)
+                parsed_terms = [
+                    parse_latex(term.lstrip("+ ")).subs(sp.Symbol("e"), sp.E)
+                    for term in terms
+                    if term.strip()
+                ]
+                return sp.Add(*parsed_terms)
+            return parse_latex(normalized).subs(sp.Symbol("e"), sp.E)
         except Exception as exc:
-            return VerifyResult(False, len(recs), [f"could not parse step {len(recs)}: {exc}"])
-        recs.append(StepRec(rule=rule, before=expr, after=expr))
-    sol = Solution(steps=recs, answer=recs[-1].after if recs else None)
+            return VerifyResult(False, index, [f"could not parse step {index}: {exc}"])
+
+    recs: list[StepRec] = []
+    modulo_c = topic == Topic.integral and p.limits is None
+    expected_before = p.expr
+    for i, (rule, before, after) in enumerate(step_latex):
+        parsed_before = parse_step(before, i)
+        if isinstance(parsed_before, VerifyResult):
+            return parsed_before
+        parsed_after = parse_step(after, i)
+        if isinstance(parsed_after, VerifyResult):
+            return parsed_after
+
+        mod = modulo_c or (topic == Topic.integral and rule != "fundamental theorem of calculus")
+        if not equivalent(parsed_before, expected_before, p.var, modulo_constant=mod):
+            return VerifyResult(False, i, [f"step {i} ({rule}) starts from an unexpected expression"])
+        if not equivalent(parsed_before, parsed_after, p.var, modulo_constant=mod):
+            return VerifyResult(False, i, [f"step {i} ({rule}) changes the value incorrectly"])
+
+        recs.append(StepRec(rule=rule, before=parsed_before, after=parsed_after))
+        expected_before = parsed_after
+
+    sol = Solution(steps=recs, answer=recs[-1].after)
     return verify(p, topic, sol)

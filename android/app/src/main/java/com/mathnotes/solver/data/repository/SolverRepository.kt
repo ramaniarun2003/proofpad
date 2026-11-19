@@ -68,7 +68,7 @@ class SolverRepository(context: Context) {
         resp
     }
 
-    suspend fun verify(sessionId: String, latex: String, topic: String, steps: List<Step>): VerifyResponse =
+    suspend fun verify(sessionId: String, latex: String, topic: String = "unknown", steps: List<Step>): VerifyResponse =
         withContext(Dispatchers.IO) { api.verify(VerifyRequest(sessionId = sessionId, latex = latex, topic = topic, steps = steps)) }
 
     suspend fun backendReachable(): Boolean = withContext(Dispatchers.IO) {

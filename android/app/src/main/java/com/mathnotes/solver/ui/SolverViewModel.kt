@@ -6,12 +6,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mathnotes.solver.data.api.ApiClient
 import com.mathnotes.solver.data.api.SolveResponse
+import com.mathnotes.solver.data.api.Step
 import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.data.db.FolderWithCount
 import com.mathnotes.solver.data.db.SessionEntity
 import com.mathnotes.solver.data.repository.GalleryRepository
 import com.mathnotes.solver.data.repository.SolverRepository
 import com.mathnotes.solver.image.CropSpec
+import com.mathnotes.solver.image.LatexStepSplitter
 import com.mathnotes.solver.image.Preprocessor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +41,8 @@ data class SolverUiState(
     val topic: String = "unknown",
     val result: SolveResponse? = null,
     val difficulty: Difficulty? = null,
+    val userSteps: List<String> = emptyList(),
+    val isVerifyMode: Boolean = false,
 )
 
 /** Active filters for the folder-detail screen (folderId < 0 means "no folder open"). */
@@ -154,12 +158,62 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 _state.update { it.copy(imageFile = clean, status = "Recognizing…") }
                 val rec = repo.recognize(clean)
+                val raw = rec.latex
+                val cleaned = raw.replace(Regex("\\\\begin\\{aligned\\}|\\\\end\\{aligned\\}|\\\\begin\\{align\\*\\}|\\\\end\\{align\\*\\}"), "").trim()
+                val rawLines = cleaned.split(Regex("\\\\\\\\|\n")).map { it.replace("&", "").trim() }.filter { it.isNotEmpty() }
+
+                val line1 = rawLines.firstOrNull() ?: raw.trim()
+                val originalProblem = if (line1.contains("=")) line1.split("=", limit = 2)[0].trim() else line1
+
+                val stepExpressions = mutableListOf<String>()
+                rawLines.forEachIndexed { index, line ->
+                    if (line.contains("=")) {
+                        val rhs = line.split("=", limit = 2)[1].trim()
+                        if (rhs.isNotEmpty()) stepExpressions.add(rhs)
+                    } else if (line.startsWith("=")) {
+                        val rhs = line.substring(1).trim()
+                        if (rhs.isNotEmpty()) stepExpressions.add(rhs)
+                    } else if (index > 0) {
+                        stepExpressions.add(line)
+                    }
+                }
+                val finalSteps = if (stepExpressions.isNotEmpty()) stepExpressions else LatexStepSplitter.splitIntoSteps(raw)
+
+                val stepObjects = finalSteps.mapIndexed { index, expr ->
+                    Step(
+                        index = index,
+                        rule = "user step ${index + 1}",
+                        beforeLatex = if (index == 0) originalProblem else finalSteps[index - 1],
+                        afterLatex = expr,
+                        note = "",
+                    )
+                }
+
+                val splitSteps = LatexStepSplitter.splitIntoSteps(raw)
+
+                val topicToUse = if (topicHint != "unknown") topicHint else rec.topicGuess
+
+                _state.update { it.copy(status = "Verifying steps…") }
+                val verifyResp = repo.verify(rec.sessionId, originalProblem, "unknown", stepObjects)
+
+                val solveResp = SolveResponse(
+                    sessionId = rec.sessionId,
+                    topic = topicToUse,
+                    steps = stepObjects,
+                    answerLatex = stepObjects.lastOrNull()?.afterLatex ?: originalProblem,
+                    verified = verifyResp.verified,
+                    mismatchAt = verifyResp.mismatchAt,
+                    details = verifyResp.details,
+                )
+
                 _state.update {
                     it.copy(
                         busy = false, status = "",
-                        sessionId = rec.sessionId, latex = rec.latex,
+                        sessionId = rec.sessionId, latex = originalProblem,
                         confidence = rec.confidence, lowConfidence = rec.lowConfidence,
-                        topic = if (topicHint != "unknown") topicHint else rec.topicGuess,
+                        topic = topicToUse,
+                        result = solveResp,
+                        userSteps = splitSteps,
                     )
                 }
             } catch (e: Exception) {
