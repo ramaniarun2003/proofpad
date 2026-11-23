@@ -66,15 +66,13 @@ def print_connection_block(port: int, version: str) -> None:
     print("\n".join(out), flush=True)
 
 
-def register_mdns(port: int, version: str):
-    """Advertise `_proofpad._tcp.local.` with a {version} TXT record. Returns a handle to unregister."""
-    from zeroconf import ServiceInfo, Zeroconf
+def _service_info(port: int, version: str):
+    from zeroconf import ServiceInfo
 
     ips = local_ipv4s()
     if not ips:
         raise RuntimeError("no non-loopback IPv4 to advertise")
-    zc = Zeroconf()
-    info = ServiceInfo(
+    return ServiceInfo(
         type_="_proofpad._tcp.local.",
         name="ProofPad backend._proofpad._tcp.local.",
         addresses=[socket.inet_aton(ip) for ip in ips],
@@ -82,14 +80,26 @@ def register_mdns(port: int, version: str):
         properties={"version": version},
         server=f"{socket.gethostname().split('.')[0]}.local.",
     )
+
+
+async def register_mdns(port: int, version: str):
+    """
+    Advertise `_proofpad._tcp.local.` with a {version} TXT record. Uses the asyncio Zeroconf API so
+    it runs on the server's event loop (the synchronous API raises EventLoopBlocked inside lifespan).
+    Returns a handle to unregister.
+    """
+    from zeroconf.asyncio import AsyncZeroconf
+
+    info = _service_info(port, version)
+    aiozc = AsyncZeroconf()
     # allow_name_change avoids a NonUniqueNameException when a stale record lingers.
-    zc.register_service(info, allow_name_change=True)
-    return zc, info
+    await aiozc.async_register_service(info, allow_name_change=True)
+    return aiozc, info
 
 
-def unregister_mdns(handle) -> None:
-    zc, info = handle
+async def unregister_mdns(handle) -> None:
+    aiozc, info = handle
     try:
-        zc.unregister_service(info)
+        await aiozc.async_unregister_service(info)
     finally:
-        zc.close()
+        await aiozc.async_close()
