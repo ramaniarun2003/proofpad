@@ -28,6 +28,9 @@ interface HandwritingDao {
     @Query("SELECT * FROM handwriting_samples ORDER BY id ASC")
     fun observeAll(): Flow<List<HandwritingSample>>
 
+    @Query("SELECT * FROM handwriting_samples ORDER BY id ASC")
+    suspend fun getAll(): List<HandwritingSample>
+
     @Insert
     suspend fun insertAll(samples: List<HandwritingSample>)
 

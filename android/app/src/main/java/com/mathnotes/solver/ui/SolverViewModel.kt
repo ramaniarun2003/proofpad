@@ -12,6 +12,10 @@ import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.data.db.FolderWithCount
 import com.mathnotes.solver.data.db.HandwritingSample
 import com.mathnotes.solver.data.db.SessionEntity
+import com.mathnotes.solver.data.handwriting.CorrectionMap
+import com.mathnotes.solver.data.handwriting.CorrectionRule
+import com.mathnotes.solver.data.handwriting.CorrectionSuggestion
+import com.mathnotes.solver.data.handwriting.RuleMode
 import com.mathnotes.solver.data.repository.GalleryRepository
 import com.mathnotes.solver.data.repository.HandwritingRepository
 import com.mathnotes.solver.data.repository.SolverRepository
@@ -46,6 +50,8 @@ data class SolverUiState(
     val difficulty: Difficulty? = null,
     val userSteps: List<String> = emptyList(),
     val isVerifyMode: Boolean = false,
+    /** SUGGEST-mode corrections the Review screen offers as a one-tap swap. */
+    val suggestions: List<CorrectionSuggestion> = emptyList(),
 )
 
 /** Active filters for the folder-detail screen (folderId < 0 means "no folder open"). */
@@ -192,6 +198,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 val finalSteps = if (stepExpressions.isNotEmpty()) stepExpressions else LatexStepSplitter.splitIntoSteps(rawLatex)
                 val topicToUse = if (topicHint != "unknown") topicHint else rec.topicGuess
+                val suggestions = repo.suggestionsFor(originalProblem)
 
                 _state.update {
                     it.copy(
@@ -202,6 +209,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                         lowConfidence = rec.lowConfidence,
                         topic = topicToUse,
                         userSteps = finalSteps,
+                        suggestions = suggestions,
                     )
                 }
             } catch (e: Exception) {
@@ -264,6 +272,12 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     /** The user edits the recognized LaTeX on the Review screen. */
     fun updateLatex(latex: String) = _state.update { it.copy(latex = latex) }
     fun updateTopic(topic: String) = _state.update { it.copy(topic = topic) }
+
+    /** One-tap accept of a Review suggestion: rewrite the token and drop the suggestion. */
+    fun applySuggestion(s: CorrectionSuggestion) = _state.update { st ->
+        val map = CorrectionMap(listOf(CorrectionRule(s.from, s.to, s.context, 1, RuleMode.APPLY)))
+        st.copy(latex = map.applyTo(st.latex).latex, suggestions = st.suggestions - s)
+    }
 
     /** Step 5–6: send the confirmed LaTeX; receive steps + verification. */
     fun solve() {

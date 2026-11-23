@@ -12,7 +12,11 @@ import com.mathnotes.solver.data.api.VerifyResponse
 import com.mathnotes.solver.data.db.AppDatabase
 import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.data.db.SessionEntity
+import com.mathnotes.solver.data.handwriting.CorrectionMap
+import com.mathnotes.solver.data.handwriting.CorrectionSuggestion
+import com.mathnotes.solver.data.handwriting.DefaultRules
 import com.squareup.moshi.Types
+import timber.log.Timber
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -29,6 +33,7 @@ import java.io.File
 class SolverRepository(context: Context) {
     private val app = context.applicationContext
     private val dao = AppDatabase.get(app).sessions()
+    private val handwritingDao = AppDatabase.get(app).handwriting()
     private val api get() = ApiClient.service
     private val stepsAdapter = ApiClient.moshi.adapter<List<Step>>(Types.newParameterizedType(List::class.java, Step::class.java))
     private val deviceId: String = Settings.Secure.getString(app.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
@@ -44,18 +49,44 @@ class SolverRepository(context: Context) {
             "image", imageFile.name, imageFile.asRequestBody("image/jpeg".toMediaType())
         )
         val resp = api.recognize(part, deviceId.toRequestBody("text/plain".toMediaType()))
+        val corrected = if (persist) correctLatex(resp.latex, resp.confidence) else resp.latex
         if (persist) {
             dao.upsert(
                 SessionEntity(
                     sessionId = resp.sessionId,
                     imagePath = imageFile.absolutePath,
-                    recognizedLatex = resp.latex,
+                    recognizedLatex = corrected,
                     confidence = resp.confidence,
                     topic = resp.topicGuess,
                 )
             )
         }
-        resp
+        resp.copy(latex = corrected)
+    }
+
+    /**
+     * Apply the per-user correction map (built from the handwriting samples) to a recognizer
+     * result before it is shown/solved, keeping the backend stateless. With no samples yet, the
+     * built-in default `\times`→`x` heuristic stands in. Every rewrite is logged for the demo.
+     */
+    private suspend fun correctLatex(latex: String, confidence: Double): String {
+        val samples = handwritingDao.getAll()
+        val base = if (samples.isEmpty()) {
+            DefaultRules.correctTimes(latex, confidence, DefaultRules.looksParseable(latex))
+                .also { if (it != latex) Timber.d("correction(default): \\times -> x  |  %s -> %s", latex, it) }
+        } else {
+            latex
+        }
+        val result = CorrectionMap.fromSamples(samples).applyTo(base)
+        result.rewrites.forEach { r ->
+            Timber.d("correction(user): %s -> %s%s", r.from, r.to, r.context?.let { " after $it" } ?: "")
+        }
+        return result.latex
+    }
+
+    /** SUGGEST-mode rules whose from-token appears in [latex]; shown on Review for a one-tap swap. */
+    suspend fun suggestionsFor(latex: String): List<CorrectionSuggestion> = withContext(Dispatchers.IO) {
+        CorrectionMap.fromSamples(handwritingDao.getAll()).suggestionsFor(latex)
     }
 
     suspend fun solve(sessionId: String, latex: String, topic: String): SolveResponse = withContext(Dispatchers.IO) {
