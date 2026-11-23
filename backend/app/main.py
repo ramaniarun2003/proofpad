@@ -19,15 +19,15 @@ async def lifespan(_: FastAPI):
     mdns = None
     if settings.MDNS_ENABLED:
         try:
-            mdns = discovery.register_mdns(settings.PORT, settings.APP_VERSION)
+            mdns = await discovery.register_mdns(settings.PORT, settings.APP_VERSION)
             print(f"mDNS: advertising _proofpad._tcp.local. on port {settings.PORT}", flush=True)
         except Exception as exc:  # advertising is best-effort; the app still works without it
-            print(f"mDNS: not advertising ({exc})", flush=True)
+            print(f"mDNS: not advertising ({type(exc).__name__}: {exc})", flush=True)
     try:
         yield
     finally:
         if mdns is not None:
-            discovery.unregister_mdns(mdns)
+            await discovery.unregister_mdns(mdns)
 
 
 app = FastAPI(
