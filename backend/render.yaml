@@ -17,13 +17,17 @@ services:
         sync: false        # set in the dashboard
       - key: PROOFPAD_API_KEY
         sync: false        # set in the dashboard; the app sends it as X-ProofPad-Key
+      # Free tier has no persistent disk, so data is EPHEMERAL — the SQLite file and uploads live
+      # under /tmp and reset on every deploy/restart (fine here: the phone caches sessions in Room).
+      # To get durable storage, switch to the Starter plan, restore the `disk:` block below, and
+      # change these back to /data/proofpad.db and /data/files.
       - key: DATABASE_URL
-        value: sqlite:////data/proofpad.db   # on the mounted disk (4 slashes = absolute /data)
+        value: sqlite:////tmp/proofpad/proofpad.db   # 4 slashes = absolute /tmp/proofpad/proofpad.db
       - key: FILES_DIR
-        value: /data/files
+        value: /tmp/proofpad/files
       - key: PROOFPAD_MDNS
         value: "0"
-    disk:
-      name: proofpad-data
-      mountPath: /data
-      sizeGB: 1
+    # disk:                          # Starter plan only — free tier rejects disks.
+    #   name: proofpad-data
+    #   mountPath: /data
+    #   sizeGB: 1

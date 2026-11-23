@@ -56,6 +56,10 @@ def _make_engine():
     url = settings.DATABASE_URL
     if url.startswith("sqlite:///"):
         db_path = Path(url[len("sqlite:///"):])
+        # Create the DB directory on startup (it's /tmp/proofpad on Render's free tier, where data
+        # is EPHEMERAL — fine, the phone caches sessions in Room). On the Starter plan this points at
+        # the /data disk instead. _writable() does mkdir(parents=True); only a truly read-only dir
+        # falls back below so the service still starts.
         if not _writable(db_path.parent):
             # The configured dir (e.g. a persistent disk at /data) isn't mountable here —
             # fall back to an ephemeral local file so the service still starts.
@@ -76,6 +80,8 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    # Create FILES_DIR on startup (/tmp/proofpad/files on the free tier — ephemeral; /data/files on
+    # the Starter plan). mkdir(parents=True) via _writable; a read-only dir falls back below.
     if not _writable(settings.STORAGE_DIR):
         fallback = Path("./files").resolve()
         log.warning("FILES_DIR %s not writable — using ephemeral %s (uploads will NOT persist)", settings.STORAGE_DIR, fallback)
