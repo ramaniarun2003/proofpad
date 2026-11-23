@@ -10,8 +10,10 @@ import com.mathnotes.solver.data.api.SolveResponse
 import com.mathnotes.solver.data.api.Step
 import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.data.db.FolderWithCount
+import com.mathnotes.solver.data.db.HandwritingSample
 import com.mathnotes.solver.data.db.SessionEntity
 import com.mathnotes.solver.data.repository.GalleryRepository
+import com.mathnotes.solver.data.repository.HandwritingRepository
 import com.mathnotes.solver.data.repository.SolverRepository
 import com.mathnotes.solver.image.CropSpec
 import com.mathnotes.solver.image.LatexStepSplitter
@@ -57,6 +59,7 @@ data class FolderFilter(
 class SolverViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = SolverRepository(app)
     private val galleryRepo = GalleryRepository(app)
+    private val handwritingRepo = HandwritingRepository(app)
     private val prefs = app.getSharedPreferences("solver_settings", Context.MODE_PRIVATE)
 
     private val _state = MutableStateFlow(SolverUiState())
@@ -64,6 +67,11 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
 
     val history: StateFlow<List<SessionEntity>> =
         repo.history.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Handwriting samples from the setup wizard — surfaced on the Settings screen. */
+    val handwritingSamples: StateFlow<List<HandwritingSample>> =
+        handwritingRepo.samples.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    fun clearHandwriting() = viewModelScope.launch { handwritingRepo.clear() }
 
     // --- Gallery ---
     val folders: StateFlow<List<FolderWithCount>> =

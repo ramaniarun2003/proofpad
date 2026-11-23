@@ -16,7 +16,7 @@ import ru.noties.jlatexmath.JLatexMathDrawable
  * to showing the raw string in monospace instead of crashing.
  */
 @Composable
-fun LatexView(latex: String, modifier: Modifier = Modifier, textSizePx: Float = 44f) {
+fun LatexView(latex: String, modifier: Modifier = Modifier, textSizePx: Float = 44f, fillWidth: Boolean = true) {
     val drawable = runCatching {
         JLatexMathDrawable.builder(latex)
             .textSize(textSizePx)
@@ -31,7 +31,7 @@ fun LatexView(latex: String, modifier: Modifier = Modifier, textSizePx: Float = 
         return
     }
     AndroidView(
-        modifier = modifier.fillMaxWidth(),
+        modifier = if (fillWidth) modifier.fillMaxWidth() else modifier,
         factory = { ctx -> ImageView(ctx).apply { adjustViewBounds = true; scaleType = ImageView.ScaleType.FIT_START } },
         update = { it.setImageDrawable(drawable) },
     )

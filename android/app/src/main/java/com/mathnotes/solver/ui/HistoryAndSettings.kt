@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -297,11 +299,12 @@ internal fun DrawScope.drawCamera(color: Color) {
 
 /** Where the backend lives on today's LAN. */
 @Composable
-fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit) {
+fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> Unit = {}) {
     var url by remember { mutableStateOf(vm.backendUrl) }
     var debugImages by remember { mutableStateOf(vm.debugImages) }
     var adaptiveThreshold by remember { mutableStateOf(vm.useAdaptiveThreshold) }
-    Column(Modifier.fillMaxSize().systemBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val handwriting by vm.handwritingSamples.collectAsState()
+    Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Backend URL", style = MaterialTheme.typography.headlineSmall)
         Text("Laptop running uvicorn on the same Wi-Fi, e.g. http://192.168.1.42:8000/. Emulator → http://10.0.2.2:8000/.")
         OutlinedTextField(value = url, onValueChange = { url = it }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -326,6 +329,22 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit) {
             onClick = { vm.resetWelcome(); welcomeReset = true },
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (welcomeReset) "Welcome screen will show next launch ✓" else "Show welcome screen again") }
+
+        Text("Handwriting samples", style = MaterialTheme.typography.titleMedium)
+        val latest = handwriting.maxByOrNull { it.createdAt }
+        Text(
+            if (latest == null) "No samples saved yet."
+            else "${handwriting.size} samples · saved ${
+                Instant.ofEpochMilli(latest.createdAt).atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))
+            }",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = onRedoSetup, modifier = Modifier.weight(1f)) { Text("Redo setup") }
+            OutlinedButton(onClick = { vm.clearHandwriting() }, modifier = Modifier.weight(1f), enabled = handwriting.isNotEmpty()) { Text("Clear samples") }
+        }
 
         Button(onClick = { vm.setBackendUrl(url.trim()); onDone() }, modifier = Modifier.fillMaxWidth()) { Text("Save") }
     }

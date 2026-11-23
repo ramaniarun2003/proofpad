@@ -124,10 +124,12 @@ fun NotepadPage(
     title: String,
     caption: String?,
     bottomBar: @Composable RowScope.() -> Unit,
+    underHeader: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         NotepadHeader(title, caption)
+        underHeader?.invoke()
         Column(
             Modifier
                 .weight(1f)

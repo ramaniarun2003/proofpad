@@ -22,11 +22,16 @@ import com.mathnotes.solver.ui.SaveToGalleryScreen
 import com.mathnotes.solver.ui.SettingsScreen
 import com.mathnotes.solver.ui.SolverViewModel
 import com.mathnotes.solver.ui.WelcomeScreen
+import com.mathnotes.solver.ui.setup.SetupCheckScreen
+import com.mathnotes.solver.ui.setup.SetupDoneScreen
+import com.mathnotes.solver.ui.setup.SetupViewModel
+import com.mathnotes.solver.ui.setup.SetupWriteScreen
 import com.mathnotes.solver.ui.theme.NotepadTheme
 
-/** Navigation: (welcome, first launch only) → capture → review → results, plus history and settings. */
+/** Navigation: welcome → handwriting setup wizard → capture → review → results, plus history and settings. */
 class MainActivity : ComponentActivity() {
     private val vm: SolverViewModel by viewModels()
+    private val setupVm: SetupViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // AndroidX splash: keep the system splash up until Compose draws (no white flash).
@@ -34,8 +39,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // First launch shows the notebook cover; afterwards drop straight into Capture.
-        val start = if (WelcomePrefs.hasSeenWelcomeBlocking(this)) "capture" else "welcome"
+        // Straight to Capture only once the user has seen the cover AND finished (or skipped) setup.
+        val start = if (WelcomePrefs.hasSeenWelcomeBlocking(this) && WelcomePrefs.hasCompletedSetupBlocking(this)) "capture" else "welcome"
 
         setContent {
             NotepadTheme {
@@ -45,7 +50,39 @@ class MainActivity : ComponentActivity() {
                         composable("welcome") {
                             WelcomeScreen(onGetStarted = {
                                 vm.markWelcomeSeen()
-                                nav.navigate("capture") { popUpTo("welcome") { inclusive = true } }
+                                nav.navigate("setupWrite") { popUpTo("welcome") { inclusive = true } }
+                            })
+                        }
+                        // --- Handwriting setup wizard ---
+                        composable("setupWrite") {
+                            SetupWriteScreen(
+                                onSkip = {
+                                    setupVm.markSetupComplete()
+                                    nav.navigate("capture") { popUpTo("setupWrite") { inclusive = true } }
+                                },
+                                onCapture = { nav.navigate("setupCapture") },
+                            )
+                        }
+                        composable("setupCapture") {
+                            CaptureScreen(
+                                vm,
+                                onCaptured = {}, onGalleryPicked = {}, onHistory = {}, onGallery = {}, onSettings = {},
+                                pageMode = true,
+                                setupVm = setupVm,
+                                onPageRecognized = { nav.navigate("setupCheck") },
+                            )
+                        }
+                        composable("setupCheck") {
+                            SetupCheckScreen(
+                                setupVm,
+                                onRetake = { nav.popBackStack("setupCapture", inclusive = false) },
+                                onSave = { setupVm.saveSamples(); nav.navigate("setupDone") },
+                            )
+                        }
+                        composable("setupDone") {
+                            SetupDoneScreen(setupVm, onDone = {
+                                setupVm.markSetupComplete()
+                                nav.navigate("capture") { popUpTo("setupWrite") { inclusive = true } }
                             })
                         }
                         composable("capture") {
@@ -93,7 +130,16 @@ class MainActivity : ComponentActivity() {
                                 onSettings = { nav.navigate("settings") },
                                 onSnap = { nav.popBackStack("capture", inclusive = false) })
                         }
-                        composable("settings") { SettingsScreen(vm, onDone = { nav.popBackStack() }) }
+                        composable("settings") {
+                            SettingsScreen(
+                                vm,
+                                onDone = { nav.popBackStack() },
+                                onRedoSetup = {
+                                    setupVm.reset()
+                                    nav.navigate("setupWrite") { popUpTo("settings") { inclusive = true } }
+                                },
+                            )
+                        }
                     }
                 }
             }

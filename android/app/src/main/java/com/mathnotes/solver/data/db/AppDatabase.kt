@@ -133,18 +133,38 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
-@Database(entities = [SessionEntity::class, FolderEntity::class], version = 2, exportSchema = false)
+/** v2 → v3: add the handwriting_samples table used by the setup wizard (no data loss). */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS handwriting_samples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                expectedLatex TEXT NOT NULL,
+                recognizedLatex TEXT NOT NULL,
+                correctedLatex TEXT,
+                cropPath TEXT,
+                confidence REAL NOT NULL,
+                createdAt INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
+}
+
+@Database(entities = [SessionEntity::class, FolderEntity::class, HandwritingSample::class], version = 3, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun sessions(): SessionDao
     abstract fun gallery(): GalleryDao
+    abstract fun handwriting(): HandwritingDao
 
     companion object {
         @Volatile private var instance: AppDatabase? = null
 
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "mathnotes.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
                 .also { instance = it }
         }
