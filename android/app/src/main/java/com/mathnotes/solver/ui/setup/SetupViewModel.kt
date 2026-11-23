@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mathnotes.solver.data.WelcomePrefs
 import com.mathnotes.solver.data.db.HandwritingSample
+import com.mathnotes.solver.data.handwriting.CorrectionMap
 import com.mathnotes.solver.data.repository.HandwritingRepository
 import com.mathnotes.solver.data.repository.SolverRepository
 import com.mathnotes.solver.image.CropSpec
@@ -68,10 +69,19 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
     /** Number of lines the recognizer (as corrected) read the way we asked for. */
     val correctCount: Int get() = _state.value.lines.count { it.isMatch }
 
-    /** Up to three "x is sometimes read as ×" lines for the done screen, from the mismatches. */
-    fun correctionLines(): List<String> = SetupMatching.correctionLines(
-        _state.value.lines.filterNot { it.isMatch }.map { it.expectedLatex to it.effectiveLatex },
-    )
+    /**
+     * Plain-word descriptions of the rules the correction map derives from the samples (max 3),
+     * for the done screen. Empty when the recognizer read every line correctly.
+     */
+    fun derivedRuleLines(): List<String> = CorrectionMap.fromSamples(
+        _state.value.lines.map {
+            HandwritingSample(
+                expectedLatex = it.expectedLatex,
+                recognizedLatex = it.recognizedLatex,
+                correctedLatex = it.correctedLatex,
+            )
+        },
+    ).phrasings(3)
 
     /**
      * Preprocess the captured page, recognize it as one multi-line image, split into five

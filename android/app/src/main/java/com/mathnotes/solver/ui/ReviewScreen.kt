@@ -173,6 +173,21 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
                     Text("+ Add Step")
                 }
 
+                // Per-user correction suggestions (SUGGEST rules) — one-tap swap.
+                state.suggestions.forEach { s ->
+                    StickyNote(
+                        Modifier.clickable { vm.applySuggestion(s) }.fillMaxWidth(0.92f),
+                        rotationDeg = -1f,
+                    ) {
+                        Text(
+                            s.message,
+                            fontFamily = NotepadFonts.PatrickHand,
+                            fontSize = 15.sp,
+                            color = NotepadColors.NoteInkYellow,
+                        )
+                    }
+                }
+
                 if (state.lowConfidence) {
                     StickyNote(rotationDeg = 1f) {
                         Text(

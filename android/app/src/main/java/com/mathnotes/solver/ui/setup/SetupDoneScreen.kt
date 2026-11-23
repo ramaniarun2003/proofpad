@@ -37,7 +37,7 @@ import java.io.File
 @Composable
 fun SetupDoneScreen(setupVm: SetupViewModel, onDone: () -> Unit) {
     val state by setupVm.state.collectAsState()
-    val corrections = setupVm.correctionLines()
+    val corrections = setupVm.derivedRuleLines()
 
     NotepadPage(
         title = "Got it",
@@ -81,7 +81,8 @@ fun SetupDoneScreen(setupVm: SetupViewModel, onDone: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp, end = 8.dp, bottom = 6.dp),
         )
 
-        corrections.forEach { line ->
+        val lines = corrections.ifEmpty { listOf("Mathpix read all five correctly, nothing to fix yet.") }
+        lines.forEach { line ->
             Row(
                 Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
