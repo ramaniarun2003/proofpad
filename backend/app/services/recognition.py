@@ -177,9 +177,11 @@ def _strip_delims(text: str) -> str:
 async def reachable() -> bool:
     if settings.STUB_RECOGNITION:
         return False
+    # Probe the real endpoint (settings.MATHPIX_URL = v3/text), not the bare api.mathpix.com root,
+    # which has no handler and hangs. A GET there answers in ~60ms with 401/405 — proof it's reachable.
     try:
         async with httpx.AsyncClient(timeout=3) as client:
-            r = await client.get("https://api.mathpix.com/")
+            r = await client.get(settings.MATHPIX_URL)
         return r.status_code < 500
     except httpx.HTTPError:
         return False
