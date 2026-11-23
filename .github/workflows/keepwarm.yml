@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Wake the instance
         run: |
-          URL="${{ vars.PROOFPAD_URL || 'https://proofpad-backend.onrender.com' }}"
+          URL="${{ vars.PROOFPAD_URL || 'https://proofpad-backend-8bbs.onrender.com' }}"
           echo "pinging $URL/health"
           # Allow up to 90s for a cold start; never fail the job (keep-warm is best-effort).
           curl -fsS --max-time 90 "$URL/health" || echo "ping failed (instance may be cold-starting)"
