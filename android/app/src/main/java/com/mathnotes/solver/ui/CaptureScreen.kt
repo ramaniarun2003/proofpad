@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -64,6 +66,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.mathnotes.solver.image.CropSpec
+import com.mathnotes.solver.ui.setup.SetupEvent
+import com.mathnotes.solver.ui.setup.SetupViewModel
 import com.mathnotes.solver.ui.theme.NotepadColors
 import com.mathnotes.solver.ui.theme.NotepadFonts
 import java.io.File
@@ -78,6 +82,12 @@ private const val GUIDE_TOP = 0.25f
 private const val GUIDE_WIDTH = 0.84f
 private const val GUIDE_HEIGHT = 0.23f
 private const val GUIDE_MARGIN = 0.05f
+
+/** Page-mode guide: a tall box covering most of the sheet, for the five-line handwriting page. */
+private const val PAGE_LEFT = 0.07f
+private const val PAGE_TOP = 0.12f
+private const val PAGE_WIDTH = 0.86f
+private const val PAGE_HEIGHT = 0.74f
 
 /** Chip label → the topic value the backend expects ("unknown" = Auto / let the recognizer guess). */
 private val TOPICS = listOf(
@@ -101,10 +111,33 @@ fun CaptureScreen(
     onHistory: () -> Unit,
     onGallery: () -> Unit,
     onSettings: () -> Unit,
+    pageMode: Boolean = false,
+    setupVm: SetupViewModel? = null,
+    onPageRecognized: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
     val state by vm.state.collectAsState()
+
+    // Page mode (handwriting setup) drives its own busy/snackbar from the SetupViewModel.
+    val setupState = setupVm?.state?.collectAsState()?.value
+    val busy = if (pageMode) setupState?.busy == true else state.busy
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(setupVm, pageMode) {
+        if (!pageMode || setupVm == null) return@LaunchedEffect
+        setupVm.events.collect { ev ->
+            when (ev) {
+                is SetupEvent.Recognized -> onPageRecognized()
+                is SetupEvent.Error -> snackbar.showSnackbar(ev.message)
+            }
+        }
+    }
+
+    // Active framing geometry: the small single-problem box, or the tall whole-page box.
+    val gLeft = if (pageMode) PAGE_LEFT else GUIDE_LEFT
+    val gTop = if (pageMode) PAGE_TOP else GUIDE_TOP
+    val gWidth = if (pageMode) PAGE_WIDTH else GUIDE_WIDTH
+    val gHeight = if (pageMode) PAGE_HEIGHT else GUIDE_HEIGHT
 
     var hasPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
@@ -142,12 +175,17 @@ fun CaptureScreen(
                     val crop = CropSpec.GuideBox(
                         viewWidth = previewSize.width.toFloat(),
                         viewHeight = previewSize.height.toFloat(),
-                        leftFrac = GUIDE_LEFT, topFrac = GUIDE_TOP,
-                        widthFrac = GUIDE_WIDTH, heightFrac = GUIDE_HEIGHT,
+                        leftFrac = gLeft, topFrac = gTop,
+                        widthFrac = gWidth, heightFrac = gHeight,
                         marginFrac = GUIDE_MARGIN,
                     )
-                    val topicHint = TOPICS.firstOrNull { it.first == selectedTopic }?.second ?: "unknown"
-                    vm.captureAndRecognize(f, crop, topicHint); onCaptured()
+                    if (pageMode) {
+                        // Recognition result drives navigation via SetupEvent; stay here on failure.
+                        setupVm?.capturePage(f, crop)
+                    } else {
+                        val topicHint = TOPICS.firstOrNull { it.first == selectedTopic }?.second ?: "unknown"
+                        vm.captureAndRecognize(f, crop, topicHint); onCaptured()
+                    }
                 }
                 override fun onError(exception: ImageCaptureException) { /* surface via snackbar */ }
             },
@@ -191,7 +229,7 @@ fun CaptureScreen(
         }
 
         // Dimming scrim with a clear window, the yellow guide border, and corner brackets.
-        Canvas(Modifier.fillMaxSize()) { drawGuide() }
+        Canvas(Modifier.fillMaxSize()) { drawGuide(gLeft, gTop, gWidth, gHeight) }
 
         // Header: wordmark + flash / history icon buttons.
         Row(
@@ -214,14 +252,16 @@ fun CaptureScreen(
                     },
                     highlighted = torchOn,
                 ) { if (torchOn) drawFlashOn() else drawFlashOff() }
-                RoundIconButton(onClick = onGallery) { drawGrid() }
-                RoundIconButton(onClick = onHistory) { drawHistory() }
+                if (!pageMode) {
+                    RoundIconButton(onClick = onGallery) { drawGrid() }
+                    RoundIconButton(onClick = onHistory) { drawHistory() }
+                }
             }
         }
 
         // Caption under the header.
         Text(
-            "Put one problem inside the box, page flat",
+            if (pageMode) "Fit the whole page of five lines in the box" else "Put one problem inside the box, page flat",
             Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
@@ -235,10 +275,11 @@ fun CaptureScreen(
 
         // Status line just below the guide box.
         Text(
-            if (state.busy) state.status.ifBlank { "Recognizing…" } else "page found · hold still",
+            if (busy) (if (pageMode) setupState?.status else state.status)?.ifBlank { "Recognizing…" } ?: "Recognizing…"
+            else "page found · hold still",
             Modifier
                 .fillMaxWidth()
-                .offset(y = h * (GUIDE_TOP + GUIDE_HEIGHT) + 10.dp)
+                .offset(y = h * (gTop + gHeight) + 10.dp)
                 .padding(horizontal = 20.dp),
             color = NotepadColors.CaptureCaption,
             fontFamily = NotepadFonts.PatrickHand,
@@ -246,29 +287,31 @@ fun CaptureScreen(
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
 
-        // Topic hint chips.
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .offset(y = h * 0.77f)
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-        ) {
-            TOPICS.forEach { (label, _) -> TopicChip(label, selected = selectedTopic == label) { selectedTopic = label } }
+        // Topic hint chips — single-problem mode only.
+        if (!pageMode) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .offset(y = h * 0.77f)
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+            ) {
+                TOPICS.forEach { (label, _) -> TopicChip(label, selected = selectedTopic == label) { selectedTopic = label } }
+            }
         }
 
-        // Bottom control row: gallery thumb · shutter · settings.
+        // Bottom control row: gallery thumb · shutter · settings (shutter only in page mode).
         Row(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(horizontal = 44.dp, vertical = 24.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = if (pageMode) Arrangement.Center else Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Gallery thumbnail button.
-            Box(
+            if (!pageMode) Box(
                 Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(10.dp))
@@ -279,7 +322,7 @@ fun CaptureScreen(
             ) { Canvas(Modifier.size(28.dp)) { drawGalleryGlyph(NotepadColors.Ink) } }
 
             // Shutter.
-            val shutterEnabled = hasPermission && !state.busy
+            val shutterEnabled = hasPermission && !busy
             Box(
                 Modifier
                     .size(82.dp)
@@ -296,28 +339,36 @@ fun CaptureScreen(
             }
 
             // Settings.
-            Box(
+            if (!pageMode) Box(
                 Modifier.size(52.dp).clickable(onClick = onSettings),
                 contentAlignment = Alignment.Center,
             ) { Canvas(Modifier.size(26.dp)) { drawGear(NotepadColors.Paper) } }
         }
 
         // Busy spinner over the guide.
-        if (state.busy) {
+        if (busy) {
             CircularProgressIndicator(
                 Modifier.align(Alignment.Center),
                 color = NotepadColors.StickyYellow,
+            )
+        }
+
+        // Snackbar (page mode: "I could only find n lines…").
+        if (pageMode) {
+            SnackbarHost(
+                snackbar,
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 120.dp),
             )
         }
     }
 }
 
 /** Dimming scrim outside the guide, plus the yellow border and corner brackets. */
-private fun DrawScope.drawGuide() {
-    val gl = size.width * GUIDE_LEFT
-    val gt = size.height * GUIDE_TOP
-    val gw = size.width * GUIDE_WIDTH
-    val gh = size.height * GUIDE_HEIGHT
+private fun DrawScope.drawGuide(leftFrac: Float, topFrac: Float, widthFrac: Float, heightFrac: Float) {
+    val gl = size.width * leftFrac
+    val gt = size.height * topFrac
+    val gw = size.width * widthFrac
+    val gh = size.height * heightFrac
     val scrim = NotepadColors.CaptureScrim
     // Four bands around the clear window.
     drawRect(scrim, Offset(0f, 0f), Size(size.width, gt))

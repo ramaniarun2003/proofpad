@@ -18,9 +18,10 @@ private val Context.welcomeDataStore by preferencesDataStore(name = "welcome")
  */
 object WelcomePrefs {
     private val SEEN = booleanPreferencesKey("has_seen_welcome")
+    private val SETUP_DONE = booleanPreferencesKey("has_completed_setup")
 
     /**
-     * Read the flag once, blocking. Called from `MainActivity.onCreate` (behind the system
+     * Read the flags once, blocking. Called from `MainActivity.onCreate` (behind the system
      * splash) to pick the start destination with no first-frame flicker — a single small
      * disk read, so the brief block is fine here.
      */
@@ -28,7 +29,16 @@ object WelcomePrefs {
         context.welcomeDataStore.data.map { it[SEEN] ?: false }.first()
     }
 
+    fun hasCompletedSetupBlocking(context: Context): Boolean = runBlocking {
+        context.welcomeDataStore.data.map { it[SETUP_DONE] ?: false }.first()
+    }
+
     suspend fun setSeen(context: Context, seen: Boolean) {
         context.welcomeDataStore.edit { it[SEEN] = seen }
+    }
+
+    /** Set once the user finishes (or skips) the handwriting setup wizard; cleared to re-run it. */
+    suspend fun setSetupComplete(context: Context, complete: Boolean) {
+        context.welcomeDataStore.edit { it[SETUP_DONE] = complete }
     }
 }

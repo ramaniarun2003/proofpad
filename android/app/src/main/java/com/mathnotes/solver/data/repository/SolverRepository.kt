@@ -35,20 +35,26 @@ class SolverRepository(context: Context) {
 
     val history: Flow<List<SessionEntity>> = dao.observeAll()
 
-    suspend fun recognize(imageFile: File): RecognizeResponse = withContext(Dispatchers.IO) {
+    /**
+     * Upload an image for recognition. [persist] mirrors the result into a Room session so it
+     * shows in History; the handwriting setup wizard passes false so its page scans stay out of it.
+     */
+    suspend fun recognize(imageFile: File, persist: Boolean = true): RecognizeResponse = withContext(Dispatchers.IO) {
         val part = MultipartBody.Part.createFormData(
             "image", imageFile.name, imageFile.asRequestBody("image/jpeg".toMediaType())
         )
         val resp = api.recognize(part, deviceId.toRequestBody("text/plain".toMediaType()))
-        dao.upsert(
-            SessionEntity(
-                sessionId = resp.sessionId,
-                imagePath = imageFile.absolutePath,
-                recognizedLatex = resp.latex,
-                confidence = resp.confidence,
-                topic = resp.topicGuess,
+        if (persist) {
+            dao.upsert(
+                SessionEntity(
+                    sessionId = resp.sessionId,
+                    imagePath = imageFile.absolutePath,
+                    recognizedLatex = resp.latex,
+                    confidence = resp.confidence,
+                    topic = resp.topicGuess,
+                )
             )
-        )
+        }
         resp
     }
 
