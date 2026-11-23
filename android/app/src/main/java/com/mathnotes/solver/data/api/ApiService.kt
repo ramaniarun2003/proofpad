@@ -3,6 +3,7 @@ package com.mathnotes.solver.data.api
 import com.mathnotes.solver.BuildConfig
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody
@@ -41,6 +42,13 @@ object ApiClient {
         set(value) { field = if (value.endsWith("/")) value else "$value/"; cached = null }
 
     @Volatile private var cached: ApiService? = null
+
+    /** Validate and normalize a user-typed URL (trailing slash); null if it isn't a valid http(s) URL. */
+    fun parseBaseUrl(value: String): String? {
+        val t = value.trim()
+        if (t.toHttpUrlOrNull() == null) return null
+        return if (t.endsWith("/")) t else "$t/"
+    }
 
     val moshi: Moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
 
