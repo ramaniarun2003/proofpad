@@ -37,11 +37,7 @@ interface ApiService {
 }
 
 object ApiClient {
-    /** Changeable at runtime from the settings sheet, so the demo laptop's IP can be typed in. */
-    @Volatile var baseUrl: String = BuildConfig.BACKEND_URL
-        set(value) { field = if (value.endsWith("/")) value else "$value/"; cached = null }
-
-    @Volatile private var cached: ApiService? = null
+    val moshi: Moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
 
     /** Validate and normalize a user-typed URL (trailing slash); null if it isn't a valid http(s) URL. */
     fun parseBaseUrl(value: String): String? {
@@ -50,23 +46,24 @@ object ApiClient {
         return if (t.endsWith("/")) t else "$t/"
     }
 
-    val moshi: Moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-
-    val service: ApiService
-        get() = cached ?: build().also { cached = it }
-
-    private fun build(): ApiService {
+    // Built once. The HostRewriteInterceptor redirects every call onto whatever base URL the
+    // BackendLocator has currently settled on, so we never rebuild Retrofit on a network change.
+    private val client: OkHttpClient by lazy {
         val logging = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
-        val client = OkHttpClient.Builder()
+        OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)      // Mathpix + SymPy can take a few seconds
             .retryOnConnectionFailure(true)
+            .addInterceptor(HostRewriteInterceptor { BackendLocator.peek()?.currentBaseUrl })
             .addInterceptor(logging)
             .build()
-        return Retrofit.Builder()
-            .baseUrl(baseUrl)
+    }
+
+    val service: ApiService by lazy {
+        Retrofit.Builder()
+            .baseUrl("http://127.0.0.1:8000/")   // placeholder; HostRewriteInterceptor sets the real host
             .client(client)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
