@@ -54,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.mathnotes.solver.data.api.BackendState
 import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.data.db.SessionEntity
 import com.mathnotes.solver.ui.components.CheckIcon
@@ -302,7 +303,7 @@ internal fun DrawScope.drawCamera(color: Color) {
 /** Where the backend lives on today's LAN. */
 @Composable
 fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> Unit = {}) {
-    var url by remember { mutableStateOf(vm.backendUrl) }
+    var url by remember { mutableStateOf(vm.savedBackendUrl) }
     var invalidUrl by remember { mutableStateOf(false) }
     var edited by remember { mutableStateOf(false) }
     var debugImages by remember { mutableStateOf(vm.debugImages) }
@@ -310,11 +311,11 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> U
     val handwriting by vm.handwritingSamples.collectAsState()
     val backend by vm.backend.collectAsState()
     // Mirror an auto-discovered URL into the field until the user starts editing it.
-    LaunchedEffect(backend) { (backend as? BackendStatus.Connected)?.let { if (!edited) url = it.url } }
+    LaunchedEffect(backend) { (backend as? BackendState.Connected)?.let { if (!edited) url = it.url } }
 
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Backend", style = MaterialTheme.typography.headlineSmall)
-        BackendStatusRow(backend, onAutoDetect = vm::autoConnect)
+        BackendStatusRow(backend, onAutoDetect = vm::searchBackend)
         Text("Found automatically on the same Wi-Fi (or over adb). Override here only if needed, e.g. http://192.168.1.42:8000/.")
         OutlinedTextField(
             value = url,
@@ -371,20 +372,19 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> U
 
 /** Connection status line for the backend, with a re-scan button. */
 @Composable
-private fun BackendStatusRow(status: BackendStatus, onAutoDetect: () -> Unit) {
+private fun BackendStatusRow(status: BackendState, onAutoDetect: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(Modifier.weight(1f)) {
             when (status) {
-                is BackendStatus.Searching -> Text("Looking for the backend…", style = MaterialTheme.typography.bodyMedium)
-                is BackendStatus.Connected -> {
-                    Text("Connected ✓", style = MaterialTheme.typography.bodyLarge, color = NotepadColors.Green)
+                is BackendState.Searching -> Text("Looking for the backend…", style = MaterialTheme.typography.bodyMedium)
+                is BackendState.Connected -> {
+                    Text("Connected ✓  ${status.latencyMs}ms", style = MaterialTheme.typography.bodyLarge, color = NotepadColors.Green)
                     Text(status.url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                is BackendStatus.NotFound -> Text("No backend found — is it running on the same Wi-Fi?", style = MaterialTheme.typography.bodyMedium, color = NotepadColors.Red)
-                is BackendStatus.Unknown -> Text("Not connected yet.", style = MaterialTheme.typography.bodyMedium)
+                is BackendState.NotFound -> Text("No backend found — is it running on the same Wi-Fi?", style = MaterialTheme.typography.bodyMedium, color = NotepadColors.Red)
             }
         }
-        if (status is BackendStatus.Searching) {
+        if (status is BackendState.Searching) {
             CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
         } else {
             OutlinedButton(onClick = onAutoDetect) { Text("Auto-detect") }

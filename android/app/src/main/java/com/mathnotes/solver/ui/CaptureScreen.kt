@@ -65,7 +65,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import com.mathnotes.solver.image.CropSpec
+import com.mathnotes.solver.ui.components.BackendSheet
+import com.mathnotes.solver.ui.components.BackendStatusChip
 import com.mathnotes.solver.ui.setup.SetupEvent
 import com.mathnotes.solver.ui.setup.SetupViewModel
 import com.mathnotes.solver.ui.theme.NotepadColors
@@ -133,6 +137,22 @@ fun CaptureScreen(
         }
     }
 
+    // Backend discovery (normal mode): the header chip + sheet, and the keep-photo-and-retry flow.
+    val backendState by vm.backend.collectAsState()
+    var showBackendSheet by remember { mutableStateOf(false) }
+    val qrScanner = rememberLauncherForActivityResult(ScanContract()) { result ->
+        result.contents?.let { vm.setBackendUrl(it) }
+    }
+    LaunchedEffect(vm, pageMode) {
+        if (pageMode) return@LaunchedEffect
+        vm.captureEvents.collect { ev ->
+            when (ev) {
+                is com.mathnotes.solver.ui.CaptureEvent.NavigateToReview -> onCaptured()
+                is com.mathnotes.solver.ui.CaptureEvent.OpenBackendSheet -> showBackendSheet = true
+            }
+        }
+    }
+
     // Active framing geometry: the small single-problem box, or the tall whole-page box.
     val gLeft = if (pageMode) PAGE_LEFT else GUIDE_LEFT
     val gTop = if (pageMode) PAGE_TOP else GUIDE_TOP
@@ -184,7 +204,8 @@ fun CaptureScreen(
                         setupVm?.capturePage(f, crop)
                     } else {
                         val topicHint = TOPICS.firstOrNull { it.first == selectedTopic }?.second ?: "unknown"
-                        vm.captureAndRecognize(f, crop, topicHint); onCaptured()
+                        // If the backend is down the photo is kept and retried once it connects.
+                        vm.submitCapture(f, crop, topicHint)
                     }
                 }
                 override fun onError(exception: ImageCaptureException) { /* surface via snackbar */ }
@@ -253,10 +274,27 @@ fun CaptureScreen(
                     highlighted = torchOn,
                 ) { if (torchOn) drawFlashOn() else drawFlashOff() }
                 if (!pageMode) {
+                    BackendStatusChip(backendState, onClick = { showBackendSheet = true })
                     RoundIconButton(onClick = onGallery) { drawGrid() }
                     RoundIconButton(onClick = onHistory) { drawHistory() }
                 }
             }
+        }
+
+        if (showBackendSheet) {
+            BackendSheet(
+                state = backendState,
+                savedUrl = vm.savedBackendUrl,
+                onSearchAgain = vm::searchBackend,
+                onScanQr = {
+                    qrScanner.launch(
+                        ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                            .setPrompt("Scan the backend QR from the terminal").setBeepEnabled(false).setOrientationLocked(false),
+                    )
+                },
+                onSaveUrl = vm::setBackendUrl,
+                onDismiss = { showBackendSheet = false },
+            )
         }
 
         // Caption under the header.

@@ -27,5 +27,10 @@ class Settings:
     MAX_IMAGE_BYTES: int = int(os.getenv("MAX_IMAGE_BYTES", str(2 * 1024 * 1024)))
     LOW_CONFIDENCE: float = float(os.getenv("LOW_CONFIDENCE", "0.6"))
 
+    # Discovery: the port we advertise/print and whether to broadcast over mDNS.
+    APP_VERSION: str = "0.1.0"
+    PORT: int = int(os.getenv("PORT", "8000"))
+    MDNS_ENABLED: bool = os.getenv("PROOFPAD_MDNS", "1").lower() not in ("0", "false", "no")
+
 
 settings = Settings()

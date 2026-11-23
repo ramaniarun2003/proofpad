@@ -5,7 +5,8 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mathnotes.solver.data.api.ApiClient
-import com.mathnotes.solver.data.api.BackendDiscovery
+import com.mathnotes.solver.data.api.BackendLocator
+import com.mathnotes.solver.data.api.BackendState
 import com.mathnotes.solver.data.WelcomePrefs
 import com.mathnotes.solver.data.api.SolveResponse
 import com.mathnotes.solver.data.api.Step
@@ -24,9 +25,11 @@ import com.mathnotes.solver.image.CropSpec
 import com.mathnotes.solver.image.LatexStepSplitter
 import com.mathnotes.solver.image.Preprocessor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -57,12 +60,13 @@ data class SolverUiState(
 
 private const val BACKEND_URL_PREF = "backend_url"
 
-/** Live connection state for the backend, shown on the Settings screen. */
-sealed interface BackendStatus {
-    data object Unknown : BackendStatus
-    data object Searching : BackendStatus
-    data class Connected(val url: String) : BackendStatus
-    data object NotFound : BackendStatus
+/** A photo taken while the backend was unreachable, retried automatically once connected. */
+private data class PendingCapture(val raw: File, val crop: CropSpec?, val topicHint: String)
+
+/** One-shot signals the capture flow sends to the UI. */
+sealed interface CaptureEvent {
+    data object NavigateToReview : CaptureEvent
+    data object OpenBackendSheet : CaptureEvent
 }
 
 /** Active filters for the folder-detail screen (folderId < 0 means "no folder open"). */
@@ -82,30 +86,26 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(SolverUiState())
     val state: StateFlow<SolverUiState> = _state
 
-    // --- Backend connection (remembered + auto-discovered, so no manual typing) ---
-    private val _backend = MutableStateFlow<BackendStatus>(BackendStatus.Unknown)
-    val backend: StateFlow<BackendStatus> = _backend
+    // --- Backend connection (auto-discovered via saved/USB/mDNS/gateway; no manual typing) ---
+    private val locator = BackendLocator.get(app)
+    val backend: StateFlow<BackendState> = locator.state
+
+    private val _captureEvents = MutableSharedFlow<CaptureEvent>(extraBufferCapacity = 4)
+    val captureEvents = _captureEvents.asSharedFlow()
+    private var pending: PendingCapture? = null
 
     init {
-        // Restore the last URL immediately (so a cached session still works offline), then
-        // confirm it or go hunting for the backend in the background.
-        prefs.getString(BACKEND_URL_PREF, null)?.let { ApiClient.baseUrl = it }
-        autoConnect()
-    }
-
-    /** Find and connect to the backend: saved URL → loopback/emulator → Wi-Fi sweep. */
-    fun autoConnect() {
+        // When the backend comes up and a photo is waiting, recognize it automatically.
         viewModelScope.launch {
-            _backend.value = BackendStatus.Searching
-            val found = BackendDiscovery.discover(prefs.getString(BACKEND_URL_PREF, null))
-            _backend.value = if (found != null) {
-                persistBackend(found)
-                BackendStatus.Connected(found)
-            } else {
-                BackendStatus.NotFound
-            }
+            backend.collect { if (it is BackendState.Connected) pending?.let { _ -> retryPendingCapture() } }
         }
     }
+
+    /** Re-run discovery (the sheet's "Search again"). */
+    fun searchBackend() = locator.locate()
+
+    /** Current base URL typed in Settings (the override), for the manual field. */
+    val savedBackendUrl: String get() = prefs.getString(BACKEND_URL_PREF, null).orEmpty()
 
     val history: StateFlow<List<SessionEntity>> =
         repo.history.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -182,26 +182,12 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Manual override from Settings: validate, persist, apply, and re-check reachability. */
+    /** Manual override (Settings field or a scanned QR): validate, save as the "saved" strategy, re-locate. */
     fun setBackendUrl(url: String): Boolean {
-        val normalized = ApiClient.parseBaseUrl(url) ?: return false
-        persistBackend(normalized)
-        viewModelScope.launch {
-            _backend.value = BackendStatus.Searching
-            _backend.value = if (BackendDiscovery.reachable(normalized, timeoutMs = 1500)) {
-                BackendStatus.Connected(normalized)
-            } else {
-                BackendStatus.NotFound
-            }
-        }
+        val normalized = ApiClient.parseBaseUrl(url)?.trimEnd('/') ?: return false
+        prefs.edit().putString(BACKEND_URL_PREF, normalized).apply()
+        locator.locate()
         return true
-    }
-
-    val backendUrl: String get() = ApiClient.baseUrl
-
-    private fun persistBackend(url: String) {
-        prefs.edit().putString(BACKEND_URL_PREF, url).apply()
-        ApiClient.baseUrl = url
     }
 
     /** One-time welcome cover: mark it seen after "Get started", or clear it to re-demo from Settings. */
@@ -215,6 +201,28 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     var useAdaptiveThreshold: Boolean
         get() = prefs.getBoolean("adaptive_threshold", false)
         set(v) { prefs.edit().putBoolean("adaptive_threshold", v).apply() }
+
+    /**
+     * A photo was taken. If the backend is up, recognize and go to Review. Otherwise keep the
+     * photo, open the discovery sheet, and recognize automatically once a backend connects.
+     */
+    fun submitCapture(raw: File, crop: CropSpec? = null, topicHint: String = "unknown") {
+        if (backend.value is BackendState.Connected) {
+            captureAndRecognize(raw, crop, topicHint)
+            _captureEvents.tryEmit(CaptureEvent.NavigateToReview)
+        } else {
+            pending = PendingCapture(raw, crop, topicHint)
+            _captureEvents.tryEmit(CaptureEvent.OpenBackendSheet)
+            searchBackend()
+        }
+    }
+
+    private fun retryPendingCapture() {
+        val p = pending ?: return
+        pending = null
+        captureAndRecognize(p.raw, p.crop, p.topicHint)
+        _captureEvents.tryEmit(CaptureEvent.NavigateToReview)
+    }
 
     /**
      * Step 1–3 of the workflow: preprocess on device, upload, receive LaTeX.
@@ -268,7 +276,14 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(busy = false, status = "", error = describe(e)) }
+                if (e is IOException) {
+                    // Connectivity problem → re-locate and open the discovery sheet, not a dead-end error.
+                    _state.update { it.copy(busy = false, status = "", error = null) }
+                    searchBackend()
+                    _captureEvents.tryEmit(CaptureEvent.OpenBackendSheet)
+                } else {
+                    _state.update { it.copy(busy = false, status = "", error = describe(e)) }
+                }
             }
         }
     }
@@ -380,7 +395,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
             503 -> "Recognition service unavailable — retry, or open a cached session from History."
             else -> "Server error ${e.code()}"
         }
-        is IOException -> "Cannot reach the backend at ${ApiClient.baseUrl}. Same Wi-Fi? Correct IP in Settings?"
+        is IOException -> "Can't reach the backend. Tap the status chip to find or set it."
         else -> e.message ?: e.toString()
     }
 }
