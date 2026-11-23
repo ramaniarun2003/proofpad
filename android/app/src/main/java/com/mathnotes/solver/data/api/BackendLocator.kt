@@ -5,7 +5,6 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.os.SystemClock
 import com.mathnotes.solver.BuildConfig
-import com.mathnotes.solver.data.WelcomePrefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,13 +18,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import timber.log.Timber
-import java.net.Inet4Address
 import java.util.concurrent.TimeUnit
 
 /**
- * Checks the URL saved in Settings, the build's configured URL, the last URL that worked,
- * `127.0.0.1:8000` for USB `adb reverse`, then the Wi-Fi gateway on port 8000.
- * Re-runs whenever connectivity changes. ApiClient's interceptor reads [currentBaseUrl].
+ * Uses the single backend URL the user typed in Settings (or scanned via QR), falling back to the
+ * build's configured URL when nothing is saved. Auto-discovery (USB loopback, Wi-Fi gateway, mDNS,
+ * public cold-start) was removed: on campus Wi-Fi with client isolation it guessed the wrong host.
+ * The URL is probed only to drive the status chip. ApiClient's interceptor reads [currentBaseUrl].
  */
 class BackendLocator private constructor(private val app: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -41,20 +40,21 @@ class BackendLocator private constructor(private val app: Context) {
 
     private val probeClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(1500, TimeUnit.MILLISECONDS)
-            .readTimeout(1500, TimeUnit.MILLISECONDS)
-            .callTimeout(1500, TimeUnit.MILLISECONDS)
+            // Generous enough that a typed remote URL (not just a snappy LAN host) can answer.
+            .connectTimeout(6, TimeUnit.SECONDS)
+            .readTimeout(6, TimeUnit.SECONDS)
+            .callTimeout(6, TimeUnit.SECONDS)
             .retryOnConnectionFailure(false)
             .build()
     }
 
     private val resolver = BackendResolver(
         strategies = listOf(
-            BackendResolver.Strategy("saved") { listOfNotNull(prefs.getString("backend_url", null)?.ifBlank { null }) },
-            BackendResolver.Strategy("configured") { listOf(BuildConfig.BACKEND_URL) },
-            BackendResolver.Strategy("last-worked") { listOfNotNull(WelcomePrefs.lastBackendUrl(app)) },
-            BackendResolver.Strategy("usb-loopback") { listOf("http://127.0.0.1:8000") },
-            BackendResolver.Strategy("gateway") { gatewayCandidates() },
+            // The URL the user typed in Settings / scanned via QR, else the build's configured URL.
+            BackendResolver.Strategy("manual") {
+                val saved = prefs.getString("backend_url", null)?.ifBlank { null }
+                listOfNotNull(saved ?: BuildConfig.BACKEND_URL.ifBlank { null })
+            },
         ),
         probe = ::probe,
         log = { Timber.tag("BackendLocator").d("try %s", it) },
@@ -72,7 +72,7 @@ class BackendLocator private constructor(private val app: Context) {
         locate()
     }
 
-    /** Resolve (or re-resolve) the backend. Coalesces concurrent calls. */
+    /** Probe (or re-probe) the configured backend URL. Coalesces concurrent calls. */
     fun locate() {
         if (locating?.isActive == true) return
         locating = scope.launch {
@@ -80,41 +80,17 @@ class BackendLocator private constructor(private val app: Context) {
             val res = resolver.resolve()
             if (res != null) {
                 onConnected(res.url, res.strategy, res.latencyMs)
-                return@launch
+            } else {
+                _state.value = BackendState.NotFound
+                Timber.tag("BackendLocator").w("backend URL not reachable — set it in Settings")
             }
-            // Last resort: the public Render URL. It can cold-start for up to ~60s, so poll /health
-            // every 5s for up to 75s (showing "waking up…") rather than giving up after one probe.
-            val publicUrl = BuildConfig.PUBLIC_BACKEND_URL.trim().trimEnd('/')
-            if (publicUrl.isNotBlank()) {
-                _state.value = BackendState.WakingUp
-                val deadline = SystemClock.elapsedRealtime() + 75_000
-                while (SystemClock.elapsedRealtime() < deadline) {
-                    val latency = probe(publicUrl, publicProbeClient)
-                    Timber.tag("BackendLocator").d("try public: %s -> %s", publicUrl, latency?.let { "${it}ms ✓" } ?: "waking…")
-                    if (latency != null) { onConnected(publicUrl, "public", latency); return@launch }
-                    delay(5_000)
-                }
-            }
-            _state.value = BackendState.NotFound
-            Timber.tag("BackendLocator").w("no backend found after all strategies")
         }
     }
 
-    private suspend fun onConnected(url: String, strategy: String, latencyMs: Long) {
+    private fun onConnected(url: String, strategy: String, latencyMs: Long) {
         currentBaseUrl = (url.trimEnd('/') + "/").toHttpUrlOrNull()
         _state.value = BackendState.Connected(url, latencyMs)
-        WelcomePrefs.setLastBackendUrl(app, url)
         Timber.tag("BackendLocator").i("connected via %s: %s (%dms)", strategy, url, latencyMs)
-    }
-
-    /** A longer-timeout client for the public URL, whose first (cold-start) response can be slow. */
-    private val publicProbeClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(12, TimeUnit.SECONDS)
-            .readTimeout(12, TimeUnit.SECONDS)
-            .callTimeout(12, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(false)
-            .build()
     }
 
     /** GET `<base>/health`; latency in ms if it answers as *this* backend in time, else null. */
@@ -131,16 +107,6 @@ class BackendLocator private constructor(private val app: Context) {
                 }
             }
         }.getOrNull()
-    }
-
-    // --- Wi-Fi gateway (laptop-as-hotspot) ---
-
-    private fun gatewayCandidates(): List<String> {
-        val cm = app.getSystemService(ConnectivityManager::class.java) ?: return emptyList()
-        val net = cm.activeNetwork ?: return emptyList()
-        val lp = cm.getLinkProperties(net) ?: return emptyList()
-        val gateway = lp.routes.firstOrNull { it.isDefaultRoute && it.gateway is Inet4Address }?.gateway?.hostAddress
-        return gateway?.let { listOf("http://$it:8000") } ?: emptyList()
     }
 
     private fun registerNetworkCallback() {

@@ -51,7 +51,7 @@ private val DOT_RED = NotepadColors.Red
 
 private fun dotColor(state: BackendState) = when (state) {
     is BackendState.Connected -> DOT_GREEN
-    is BackendState.Searching, is BackendState.WakingUp -> DOT_AMBER
+    is BackendState.Searching -> DOT_AMBER
     is BackendState.NotFound -> DOT_RED
 }
 
@@ -62,7 +62,7 @@ fun BackendStatusChip(state: BackendState, onClick: () -> Unit, modifier: Modifi
         initialValue = 1f, targetValue = 0.35f,
         animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "pulseAlpha",
     )
-    val busy = state is BackendState.Searching || state is BackendState.WakingUp
+    val busy = state is BackendState.Searching
     val alpha = if (busy) pulse else 1f
     Row(
         modifier
@@ -77,7 +77,7 @@ fun BackendStatusChip(state: BackendState, onClick: () -> Unit, modifier: Modifi
             Modifier.size(9.dp).graphicsLayer { this.alpha = alpha }.clip(RoundedCornerShape(999.dp)).background(dotColor(state)),
         ) {}
         Text(
-            if (state is BackendState.WakingUp) "waking up…" else "backend",
+            "backend",
             fontFamily = NotepadFonts.PatrickHand, fontSize = 15.sp, color = NotepadColors.Paper,
         )
     }
@@ -110,9 +110,8 @@ fun BackendSheet(
                     Text("Connected ✓  ${state.latencyMs}ms", fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Green)
                     Text(state.url, fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = NotepadColors.Muted)
                 }
-                is BackendState.Searching -> Text("Looking for the backend…", fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Muted)
-                is BackendState.WakingUp -> Text("Waking up the server… this can take up to a minute.", fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.Muted)
-                is BackendState.NotFound -> Text("No backend found. Make sure it's running on the same Wi-Fi, or scan its QR code.", fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.Red)
+                is BackendState.Searching -> Text("Checking the backend URL…", fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Muted)
+                is BackendState.NotFound -> Text("Can't reach that URL. Type your backend's address below, or scan its QR code.", fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.Red)
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -121,7 +120,7 @@ fun BackendSheet(
                     modifier = Modifier.weight(1f).height(48.dp),
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
-                ) { Text("Search again", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
+                ) { Text("Test again", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
                 Button(
                     onClick = onScanQr,
                     modifier = Modifier.weight(1f).height(48.dp),
