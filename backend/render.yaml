@@ -1,0 +1,29 @@
+# Render Blueprint for the ProofPad backend. See backend/README "Deploying".
+# Secrets (sync: false) are entered in the Render dashboard, not committed here.
+services:
+  - type: web
+    name: proofpad-backend
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: ohio          # central US, for Central-time class hours
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: MATHPIX_APP_ID
+        sync: false        # set in the dashboard
+      - key: MATHPIX_APP_KEY
+        sync: false        # set in the dashboard
+      - key: PROOFPAD_API_KEY
+        sync: false        # set in the dashboard; the app sends it as X-ProofPad-Key
+      - key: DATABASE_URL
+        value: sqlite:////data/proofpad.db   # on the mounted disk (4 slashes = absolute /data)
+      - key: FILES_DIR
+        value: /data/files
+      - key: PROOFPAD_MDNS
+        value: "0"
+    disk:
+      name: proofpad-data
+      mountPath: /data
+      sizeGB: 1

@@ -391,6 +391,7 @@ private fun BackendStatusRow(status: BackendState, onAutoDetect: () -> Unit) {
         Column(Modifier.weight(1f)) {
             when (status) {
                 is BackendState.Searching -> Text("Looking for the backend…", style = MaterialTheme.typography.bodyMedium)
+                is BackendState.WakingUp -> Text("Waking up the server…", style = MaterialTheme.typography.bodyMedium)
                 is BackendState.Connected -> {
                     Text("Connected ✓  ${status.latencyMs}ms", style = MaterialTheme.typography.bodyLarge, color = NotepadColors.Green)
                     Text(status.url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -398,7 +399,7 @@ private fun BackendStatusRow(status: BackendState, onAutoDetect: () -> Unit) {
                 is BackendState.NotFound -> Text("No backend found — is it running on the same Wi-Fi?", style = MaterialTheme.typography.bodyMedium, color = NotepadColors.Red)
             }
         }
-        if (status is BackendState.Searching) {
+        if (status is BackendState.Searching || status is BackendState.WakingUp) {
             CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
         } else {
             OutlinedButton(onClick = onAutoDetect) { Text("Auto-detect") }

@@ -62,6 +62,40 @@ antiderivatives). The verifier depends on it — `test_chain_invariant_every_ste
    `scripts/demo_problems.json`.
 3. `pytest` — the verifier will tell you if the rule's output is wrong.
 
+## Deploying (Render)
+Host the backend publicly so the app works from campus Wi-Fi without the laptop. Config is
+`backend/render.yaml` + `backend/Dockerfile`.
+
+1. **Create the service.** Render → *New* → *Blueprint*, pick this repo. Render reads
+   `backend/render.yaml` and provisions a free Docker web service `proofpad-backend` with a 1 GB
+   disk mounted at `/data` and health check `/health`.
+2. **Set the three secrets** (dashboard → the service → *Environment*): `MATHPIX_APP_ID`,
+   `MATHPIX_APP_KEY`, and `PROOFPAD_API_KEY` (any long random string — the app must send the same
+   value as the `X-ProofPad-Key` header, or every non-`/health` request is `401`). The rest
+   (`DATABASE_URL=/data/proofpad.db`, `FILES_DIR=/data/files`, `PROOFPAD_MDNS=0`) come from the blueprint.
+3. **Confirm it's up:** `curl https://<service>.onrender.com/health` → `{"status":"ok",...}`.
+   Protected routes without the key return `401`:
+   `curl -H "X-ProofPad-Key: <key>" https://<service>.onrender.com/discover`.
+4. **Point the app at it:** put the real URL and key in `android/local.properties` (gitignored):
+   `PUBLIC_BACKEND_URL=https://<service>.onrender.com` and `PROOFPAD_API_KEY=<key>`, then rebuild.
+   The app tries saved → USB → mDNS → gateway → this public URL last, so on-LAN it still prefers the laptop.
+5. **Keep it warm:** the free instance sleeps after ~15 min. `.github/workflows/keepwarm.yml` pings
+   `/health` every 10 min during class hours — set the repo variable `PROOFPAD_URL` to your Render URL.
+   First request after a sleep takes up to ~60s (the app shows "waking up…").
+
+   > **Disk note:** Render's *free* plan has no persistent disk, so `/data` is ephemeral — the SQLite
+   > file resets on each redeploy. That's fine here (the phone caches every session in Room), and the
+   > backend logs a warning and keeps running. For durable history, upgrade the plan so the declared
+   > 1 GB disk mounts, or point `DATABASE_URL` at a managed Postgres.
+6. **Roll back:** Render dashboard → the service → *Deploys* → pick a previous successful deploy →
+   *Rollback* (or *Redeploy*). Disable auto-deploy under *Settings* to pin a version.
+
+**Alternative — Fly.io.** `fly launch` in `backend/` (it reads the `Dockerfile`), then
+`fly secrets set MATHPIX_APP_ID=… MATHPIX_APP_KEY=… PROOFPAD_API_KEY=…`,
+`fly volumes create proofpad_data --size 1` and mount it at `/data` (`[mounts]` in `fly.toml`),
+set `DATABASE_URL=sqlite:////data/proofpad.db` and `FILES_DIR=/data/files`, then `fly deploy`.
+Health check path `/health`. Roll back with `fly releases` + `fly deploy --image <prev>`.
+
 ## Android — see `android/README.md`
 Open `android/` in Android Studio, set `BACKEND_URL` in `local.properties` (or from the app's
 Backend button), run on a device. Emulator default is `http://10.0.2.2:8000/`.

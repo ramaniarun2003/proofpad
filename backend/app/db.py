@@ -3,12 +3,26 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 from pathlib import Path
 
 from sqlalchemy import DateTime, Float, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from .config import settings
+
+log = logging.getLogger("proofpad")
+
+
+def _writable(path: Path) -> bool:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / ".write_test"
+        probe.write_text("ok")
+        probe.unlink()
+        return True
+    except Exception:
+        return False
 
 
 class Base(DeclarativeBase):
@@ -41,7 +55,18 @@ class SessionRow(Base):
 def _make_engine():
     url = settings.DATABASE_URL
     if url.startswith("sqlite:///"):
-        Path(url.replace("sqlite:///", "")).parent.mkdir(parents=True, exist_ok=True)
+        db_path = Path(url[len("sqlite:///"):])
+        if not _writable(db_path.parent):
+            # The configured dir (e.g. a persistent disk at /data) isn't mountable here —
+            # fall back to an ephemeral local file so the service still starts.
+            fallback = Path("./data/proofpad.db").resolve()
+            log.warning(
+                "DATABASE_URL dir %s not writable — using ephemeral %s (data will NOT persist across deploys)",
+                db_path.parent, fallback,
+            )
+            _writable(fallback.parent)
+            url = f"sqlite:///{fallback}"
+            settings.DATABASE_URL = url
     return create_engine(url, connect_args={"check_same_thread": False} if url.startswith("sqlite") else {})
 
 
@@ -51,7 +76,11 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 def init_db() -> None:
     Base.metadata.create_all(engine)
-    settings.STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    if not _writable(settings.STORAGE_DIR):
+        fallback = Path("./files").resolve()
+        log.warning("FILES_DIR %s not writable — using ephemeral %s (uploads will NOT persist)", settings.STORAGE_DIR, fallback)
+        settings.STORAGE_DIR = fallback
+        settings.STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_db():

@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from .config import settings
 from .db import init_db
@@ -36,7 +36,19 @@ app = FastAPI(
     version="0.1.0",
     description="Recognize (Mathpix) → parse (SymPy) → rule-based steps → independent verification.",
 )
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# No CORS — the only client is the native Android app, which isn't subject to CORS.
+
+# Shared-secret gate for the public deployment. When PROOFPAD_API_KEY is set, every request
+# except /health must send a matching X-ProofPad-Key header, so a public URL can't burn Mathpix
+# credit. Empty key = open (local dev).
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    if settings.PROOFPAD_API_KEY and request.url.path != "/health":
+        if request.headers.get("X-ProofPad-Key") != settings.PROOFPAD_API_KEY:
+            return JSONResponse({"detail": "invalid or missing X-ProofPad-Key"}, status_code=401)
+    return await call_next(request)
+
+
 app.include_router(recognize.router)
 app.include_router(solve.router)
 app.include_router(export.router)
