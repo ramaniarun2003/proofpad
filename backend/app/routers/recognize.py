@@ -7,19 +7,21 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import SessionRow, get_db
-from ..models import RecognizeResponse
+from ..models import PageLine, PageRecognizeResponse, RecognizeResponse
 from ..services import recognition
 from ..services.symbolic import guess_topic
 
 router = APIRouter(tags=["recognize"])
 
 
-@router.post("/recognize", response_model=RecognizeResponse)
+@router.post("/recognize")
 async def recognize(
     image: UploadFile = File(...),
     device_id: str = Form(""),
+    mode: str = Form("formula"),
     db: Session = Depends(get_db),
 ):
+    """`mode=formula` (default): one expression. `mode=page`: a multi-line page with per-line bboxes."""
     data = await image.read()
     if len(data) > settings.MAX_IMAGE_BYTES:
         raise HTTPException(413, f"image larger than {settings.MAX_IMAGE_BYTES} bytes")
@@ -29,9 +31,28 @@ async def recognize(
     session_id = str(uuid.uuid4())
     path = settings.STORAGE_DIR / f"{session_id}.jpg"
     path.write_bytes(data)
+    content_type = image.content_type or "image/jpeg"
+
+    if mode == "page":
+        try:
+            page = await recognition.recognize_page(data, content_type)
+        except recognition.RecognitionError as exc:
+            raise HTTPException(503, f"recognition unavailable: {exc}")
+        row = SessionRow(id=session_id, device_id=device_id, image_path=str(path),
+                         recognized_latex=page.raw_text, confidence=0.0)
+        row.log("recognize", mode="page", lines=len(page.lines), stub=settings.STUB_RECOGNITION)
+        db.add(row)
+        db.commit()
+        return PageRecognizeResponse(
+            session_id=session_id,
+            lines=[PageLine(latex=ln.latex, confidence=ln.confidence, bbox=ln.bbox) for ln in page.lines],
+            raw_text=page.raw_text,
+            image_w=page.image_w,
+            image_h=page.image_h,
+        )
 
     try:
-        result = await recognition.recognize(data, image.content_type or "image/jpeg")
+        result = await recognition.recognize(data, content_type)
     except recognition.RecognitionError as exc:
         raise HTTPException(503, f"recognition unavailable: {exc}")
 

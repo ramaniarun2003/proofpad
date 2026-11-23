@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
+import timber.log.Timber
 import java.io.File
 import java.io.IOException
 
@@ -56,6 +57,8 @@ data class SolverUiState(
     val isVerifyMode: Boolean = false,
     /** SUGGEST-mode corrections the Review screen offers as a one-tap swap. */
     val suggestions: List<CorrectionSuggestion> = emptyList(),
+    /** The raw Mathpix LaTeX before the correction map ran — shown on long-press in Review. */
+    val rawLatex: String = "",
 )
 
 private const val BACKEND_URL_PREF = "backend_url"
@@ -99,6 +102,24 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             backend.collect { if (it is BackendState.Connected) pending?.let { _ -> retryPendingCapture() } }
         }
+        // On upgrade, drop handwriting samples built from the old (broken) page read and re-prompt setup.
+        viewModelScope.launch {
+            if (WelcomePrefs.consumeRuleResetNeeded(getApplication())) {
+                handwritingRepo.clear()
+                WelcomePrefs.setSetupComplete(getApplication(), false)
+                Timber.i("cleared handwriting samples on upgrade (built from the pre-line_data page read)")
+            }
+        }
+    }
+
+    /** Settings kill switch for the per-user correction map. */
+    var useCorrections: Boolean
+        get() = repo.useCorrections
+        set(v) { repo.useCorrections = v }
+
+    /** Settings "Rebuild rules": recompute from the samples and report a short summary. */
+    fun rebuildCorrectionRules(onResult: (String) -> Unit) = viewModelScope.launch {
+        onResult(repo.rebuildCorrectionRules())
     }
 
     /** Re-run discovery (the sheet's "Search again"). */
@@ -239,7 +260,8 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                     Preprocessor.process(getApplication(), raw, crop, debug, threshold)
                 }
                 _state.update { it.copy(imageFile = clean, status = "Recognizing…") }
-                val rec = repo.recognize(clean)
+                val recResult = repo.recognize(clean)
+                val rec = recResult.response
                 val rawLatex = rec.latex
                 val cleaned = rawLatex.replace(Regex("\\\\begin\\{aligned\\}|\\\\end\\{aligned\\}|\\\\begin\\{align\\*\\}|\\\\end\\{align\\*\\}"), "").trim()
                 val rawLines = cleaned.split(Regex("\\\\\\\\|\n")).map { it.replace("&", "").trim() }.filter { it.isNotEmpty() }
@@ -273,6 +295,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                         topic = topicToUse,
                         userSteps = finalSteps,
                         suggestions = suggestions,
+                        rawLatex = recResult.rawLatex,
                     )
                 }
             } catch (e: Exception) {

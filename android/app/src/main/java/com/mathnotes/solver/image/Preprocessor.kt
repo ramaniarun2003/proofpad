@@ -38,6 +38,7 @@ import kotlin.math.sqrt
 object Preprocessor {
     private const val TAG = "Preprocessor"
     private const val MAX_SIDE = 1600
+    private const val PAGE_MAX_SIDE = 2000   // page mode keeps more detail for per-line recognition
     private const val JPEG_QUALITY = 85
 
     private val loaded: Boolean by lazy { OpenCVLoader.initLocal() }
@@ -140,12 +141,47 @@ object Preprocessor {
         return outBmp
     }
 
-    /** Resize so the long side is at most [MAX_SIDE]. Returns a fresh Mat; does not upscale. */
-    private fun capLongSide(m: Mat): Mat {
+    /** Resize so the long side is at most [maxSide]. Returns a fresh Mat; does not upscale. */
+    private fun capLongSide(m: Mat, maxSide: Int = MAX_SIDE): Mat {
         val longest = max(m.rows(), m.cols())
-        if (longest <= MAX_SIDE) return m.clone()
-        val f = MAX_SIDE.toDouble() / longest
+        if (longest <= maxSide) return m.clone()
+        val f = maxSide.toDouble() / longest
         return Mat().also { Imgproc.resize(m, it, Size(), f, f, Imgproc.INTER_AREA) }
+    }
+
+    /**
+     * Page mode (handwriting wizard): no single-problem crop — send the whole upright page, capped
+     * at [PAGE_MAX_SIDE] on the long side, grayscale + CLAHE only (no warp/threshold that can erase
+     * thin strokes). Mathpix's line_data does the line splitting. Debug stages go to files/debug.
+     */
+    fun processPage(context: Context, input: File, debug: Boolean = false): File {
+        val ts = System.currentTimeMillis().toString()
+        val upright = decodeUpright(input)
+        if (debug) saveDebug(context, ts, "page_0raw", upright)
+        val out = File(context.filesDir, "images").apply { mkdirs() }
+            .resolve(input.nameWithoutExtension + "_page.jpg")
+        val result = if (loaded) pageOpenCv(context, upright, ts, debug) else fallback(upright)
+        FileOutputStream(out).use { result.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }
+        if (debug) saveDebug(context, ts, "page_final", result)
+        Log.i(TAG, "page preprocess: ${input.name} -> ${result.width}x${result.height}")
+        return out
+    }
+
+    private fun pageOpenCv(context: Context, src: Bitmap, ts: String, debug: Boolean): Bitmap {
+        val scratch = LinkedHashSet<Mat>()
+        fun track(m: Mat) = m.also { scratch.add(it) }
+        val rgba = track(Mat()).also { Utils.bitmapToMat(src, it) }
+        val gray = track(Mat()).also { Imgproc.cvtColor(rgba, it, Imgproc.COLOR_RGBA2GRAY) }
+        val capped = track(capLongSide(gray, PAGE_MAX_SIDE))
+        if (debug) saveDebug(context, ts, "page_1gray", capped)
+        val eq = track(Mat())
+        Imgproc.createCLAHE(2.0, Size(8.0, 8.0)).apply(capped, eq)
+        if (debug) saveDebug(context, ts, "page_2clahe", eq)
+        val outBmp = Bitmap.createBitmap(eq.cols(), eq.rows(), Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(eq, outBmp)
+        scratch.forEach { it.release() }
+        if (src !== outBmp) src.recycle()
+        return outBmp
     }
 
     /** Divide by a large-kernel blur to flatten uneven lighting / desk-lamp shadows. */

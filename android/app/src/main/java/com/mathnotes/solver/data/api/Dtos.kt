@@ -15,6 +15,22 @@ data class RecognizeResponse(
 )
 
 @JsonClass(generateAdapter = false)
+data class PageLine(
+    val latex: String,
+    val confidence: Double,
+    val bbox: List<Int>,   // [x0, y0, x1, y1] in pixels of the uploaded image
+)
+
+@JsonClass(generateAdapter = false)
+data class PageRecognizeResponse(
+    @Json(name = "session_id") val sessionId: String,
+    val lines: List<PageLine>,
+    @Json(name = "raw_text") val rawText: String,
+    @Json(name = "image_w") val imageW: Int,
+    @Json(name = "image_h") val imageH: Int,
+)
+
+@JsonClass(generateAdapter = false)
 data class Step(
     val index: Int,
     val rule: String,

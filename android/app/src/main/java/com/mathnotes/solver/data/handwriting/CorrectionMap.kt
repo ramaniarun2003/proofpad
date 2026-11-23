@@ -141,9 +141,21 @@ class CorrectionMap(val rules: List<CorrectionRule>) {
             return out
         }
 
-        /** Build a map from handwriting samples; truth = correction if present, else the expected line. */
+        /** A page read below this confidence is too noisy to derive correction rules from. */
+        const val MIN_CONFIDENCE = 0.7f
+
+        /** Minimum supporting samples for a rule to auto-apply (otherwise it is only a suggestion). */
+        const val MIN_APPLY_SUPPORT = 2
+
+        /**
+         * Build a map from handwriting samples; truth = correction if present, else the expected line.
+         * Samples whose recognizer confidence is below [MIN_CONFIDENCE] are discarded entirely.
+         */
         fun fromSamples(samples: List<HandwritingSample>): CorrectionMap =
-            build(samples.map { it.recognizedLatex to (it.correctedLatex ?: it.expectedLatex) })
+            build(
+                samples.filter { it.confidence >= MIN_CONFIDENCE }
+                    .map { it.recognizedLatex to (it.correctedLatex ?: it.expectedLatex) },
+            )
 
         /** Build from (recognized, truth) pairs. The core algorithm, exercised directly by tests. */
         fun build(pairs: List<Pair<String, String>>): CorrectionMap {
@@ -178,7 +190,9 @@ class CorrectionMap(val rules: List<CorrectionRule>) {
                 val (from, to, ctx) = key
                 val tos = observed[from to ctx].orEmpty()
                 val contradicted = tos.any { it != to }   // read correctly, or mapped elsewhere
-                CorrectionRule(from, to, ctx, count, if (contradicted) RuleMode.SUGGEST else RuleMode.APPLY)
+                // Auto-apply only a rule backed by ≥2 samples and contradicted by none; else suggest.
+                val mode = if (!contradicted && count >= MIN_APPLY_SUPPORT) RuleMode.APPLY else RuleMode.SUGGEST
+                CorrectionRule(from, to, ctx, count, mode)
             }.sortedWith(compareByDescending<CorrectionRule> { it.support }.thenBy { it.fromToken })
             return CorrectionMap(rules)
         }

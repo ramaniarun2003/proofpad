@@ -26,6 +26,15 @@ interface ApiService {
         @Part("device_id") deviceId: RequestBody,
     ): RecognizeResponse
 
+    /** mode=page: a whole page of lines, each with a pixel bbox (handwriting setup wizard). */
+    @Multipart
+    @POST("recognize")
+    suspend fun recognizePage(
+        @Part image: MultipartBody.Part,
+        @Part("device_id") deviceId: RequestBody,
+        @Part("mode") mode: RequestBody,
+    ): PageRecognizeResponse
+
     @POST("solve")
     suspend fun solve(@Body body: SolveRequest): SolveResponse
 

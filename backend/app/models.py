@@ -22,6 +22,21 @@ class RecognizeResponse(BaseModel):
     low_confidence: bool
 
 
+class PageLine(BaseModel):
+    latex: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    bbox: list[int]  # [x0, y0, x1, y1] in pixels of the uploaded image
+
+
+class PageRecognizeResponse(BaseModel):
+    """mode=page: one entry per handwritten line, top-to-bottom, with pixel bboxes."""
+    session_id: str
+    lines: list[PageLine]
+    raw_text: str
+    image_w: int
+    image_h: int
+
+
 class Step(BaseModel):
     index: int
     rule: str
