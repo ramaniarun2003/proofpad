@@ -43,7 +43,7 @@ object WelcomePrefs {
         context.welcomeDataStore.edit { it[SETUP_DONE] = complete }
     }
 
-    // The last backend URL that actually answered — the auto-discovery's second strategy.
+    // The last backend URL that answered a health check.
     private val LAST_BACKEND = stringPreferencesKey("last_backend_url")
 
     suspend fun lastBackendUrl(context: Context): String? =

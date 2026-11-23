@@ -9,9 +9,20 @@ Kotlin · Jetpack Compose · CameraX · OpenCV · Retrofit/Moshi · Room · JLat
    ```
    BACKEND_URL=http://192.168.1.42:8000/
    ```
-   or change it at runtime from the **Backend** button on the capture screen.
+   or use the **Backend** button on the capture screen to enter the URL or scan a connection QR code.
    Emulator → `http://10.0.2.2:8000/` (the default).
 3. Run on a device with a camera (a Pixel is what the report assumes). Camera permission is requested on first launch.
+
+## Connect to a backend running in WSL
+
+Run `./run.sh` from `backend/` in WSL. In a Windows terminal, check that the backend responds with
+`curl.exe http://127.0.0.1:8000/health`.
+
+- **Emulator** uses `http://10.0.2.2:8000/` by default.
+- **USB phone** can use `http://127.0.0.1:8000/`. Enable USB debugging and run
+  `adb reverse tcp:8000 tcp:8000` with Windows ADB.
+- **Wi-Fi phone** needs a URL it can reach. Open `http://<host-wifi-ip>:8000/health` in the phone’s
+  browser, then enter `http://<host-wifi-ip>:8000/` in **Backend** if the health check responds.
 
 ## Where things are
 | Path | Role (report §4.1) |

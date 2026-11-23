@@ -1,6 +1,7 @@
 """End-to-end API tests in stub-recognition mode (no Mathpix key, no network)."""
 import io
 import os
+from unittest.mock import AsyncMock
 
 os.environ["STUB_RECOGNITION"] = "1"
 os.environ["DATABASE_URL"] = "sqlite:///./data/test.db"
@@ -9,7 +10,9 @@ os.environ["STORAGE_DIR"] = "./data/test_files"
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.main import app
+from app.services import recognition
 
 
 @pytest.fixture(scope="module")
@@ -23,6 +26,22 @@ def test_health(client):
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
     assert r.json()["stub_recognition"] is True
+
+
+def test_health_skips_mathpix_unless_requested(client, monkeypatch):
+    monkeypatch.setattr(settings, "STUB_RECOGNITION", False)
+    reachable = AsyncMock(return_value=True)
+    monkeypatch.setattr(recognition, "reachable", reachable)
+
+    r = client.get("/health")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok", "stub_recognition": False, "mathpix_reachable": None}
+    reachable.assert_not_called()
+
+    r = client.get("/health", params={"check_mathpix": True})
+    assert r.status_code == 200
+    assert r.json()["mathpix_reachable"] is True
+    reachable.assert_awaited_once()
 
 
 def test_recognize_then_solve_then_export(client):

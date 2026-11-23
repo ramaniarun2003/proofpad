@@ -3,21 +3,16 @@ package com.mathnotes.solver.data.api
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
-import android.net.nsd.NsdManager
-import android.net.nsd.NsdServiceInfo
 import android.os.SystemClock
+import com.mathnotes.solver.BuildConfig
 import com.mathnotes.solver.data.WelcomePrefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -25,14 +20,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import timber.log.Timber
 import java.net.Inet4Address
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
 
 /**
- * Finds and tracks the backend automatically so the user rarely types an address. Resolution
- * order (see [BackendResolver]): the URL saved in Settings → the last URL that worked →
- * `127.0.0.1:8000` (USB `adb reverse`) → mDNS `_proofpad._tcp` → the Wi-Fi gateway on :8000.
+ * Checks the URL saved in Settings, the build's configured URL, the last URL that worked,
+ * `127.0.0.1:8000` for USB `adb reverse`, then the Wi-Fi gateway on port 8000.
  * Re-runs whenever connectivity changes. ApiClient's interceptor reads [currentBaseUrl].
  */
 class BackendLocator private constructor(private val app: Context) {
@@ -59,9 +51,9 @@ class BackendLocator private constructor(private val app: Context) {
     private val resolver = BackendResolver(
         strategies = listOf(
             BackendResolver.Strategy("saved") { listOfNotNull(prefs.getString("backend_url", null)?.ifBlank { null }) },
+            BackendResolver.Strategy("configured") { listOf(BuildConfig.BACKEND_URL) },
             BackendResolver.Strategy("last-worked") { listOfNotNull(WelcomePrefs.lastBackendUrl(app)) },
             BackendResolver.Strategy("usb-loopback") { listOf("http://127.0.0.1:8000") },
-            BackendResolver.Strategy("mdns") { mdnsCandidates() },
             BackendResolver.Strategy("gateway") { gatewayCandidates() },
         ),
         probe = ::probe,
@@ -113,46 +105,6 @@ class BackendLocator private constructor(private val app: Context) {
             }
         }.getOrNull()
     }
-
-    // --- mDNS (NsdManager) ---
-
-    private suspend fun mdnsCandidates(): List<String> {
-        val nsd = runCatching { app.getSystemService(Context.NSD_SERVICE) as NsdManager }.getOrNull() ?: return emptyList()
-        val found = ConcurrentHashMap.newKeySet<String>()
-        val resolveLock = Mutex()
-        val listener = object : NsdManager.DiscoveryListener {
-            override fun onDiscoveryStarted(serviceType: String?) {}
-            override fun onDiscoveryStopped(serviceType: String?) {}
-            override fun onStartDiscoveryFailed(serviceType: String?, errorCode: Int) {}
-            override fun onStopDiscoveryFailed(serviceType: String?, errorCode: Int) {}
-            override fun onServiceLost(service: NsdServiceInfo?) {}
-            override fun onServiceFound(service: NsdServiceInfo) {
-                scope.launch { resolveLock.withLock { resolveToUrl(nsd, service)?.let(found::add) } }
-            }
-        }
-        try {
-            runCatching { nsd.discoverServices("_proofpad._tcp", NsdManager.PROTOCOL_DNS_SD, listener) }
-            delay(3000)                    // the discovery/resolve window
-        } finally {
-            runCatching { nsd.stopServiceDiscovery(listener) }
-        }
-        return found.toList()
-    }
-
-    @Suppress("DEPRECATION")
-    private suspend fun resolveToUrl(nsd: NsdManager, service: NsdServiceInfo): String? =
-        suspendCancellableCoroutine { cont ->
-            val listener = object : NsdManager.ResolveListener {
-                override fun onResolveFailed(serviceInfo: NsdServiceInfo?, errorCode: Int) {
-                    if (cont.isActive) cont.resume(null)
-                }
-                override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                    val host = serviceInfo.host?.hostAddress
-                    if (cont.isActive) cont.resume(host?.let { "http://$it:${serviceInfo.port}" })
-                }
-            }
-            runCatching { nsd.resolveService(service, listener) }.onFailure { if (cont.isActive) cont.resume(null) }
-        }
 
     // --- Wi-Fi gateway (laptop-as-hotspot) ---
 

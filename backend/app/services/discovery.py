@@ -1,5 +1,4 @@
-"""Local-network discovery helpers: list the machine's URLs, print a QR connect block,
-and advertise the service over mDNS so the phone can find it without typing an IP."""
+"""List local interface URLs and print a QR code for direct connections."""
 from __future__ import annotations
 
 import io
@@ -10,7 +9,7 @@ def local_ipv4s() -> list[str]:
     """Every non-loopback IPv4 address this machine has, best-effort."""
     ips: set[str] = set()
     try:
-        import ifaddr  # bundled with zeroconf
+        import ifaddr
 
         for adapter in ifaddr.get_adapters():
             for ip in adapter.ips:
@@ -53,7 +52,7 @@ def ascii_qr(data: str) -> str:
 def print_connection_block(port: int, version: str) -> None:
     found = urls(port)
     line = "─" * 54
-    out = [f"\n{line}\n ProofPad backend {version} — reachable at:"]
+    out = [f"\n{line}\n ProofPad backend {version} local URLs"]
     if found:
         out += [f"   {u}" for u in found]
         qr = ascii_qr(found[0])
@@ -64,42 +63,3 @@ def print_connection_block(port: int, version: str) -> None:
         out.append("   (no non-loopback IPv4 found — is Wi-Fi up?)")
     out.append(f"{line}\n")
     print("\n".join(out), flush=True)
-
-
-def _service_info(port: int, version: str):
-    from zeroconf import ServiceInfo
-
-    ips = local_ipv4s()
-    if not ips:
-        raise RuntimeError("no non-loopback IPv4 to advertise")
-    return ServiceInfo(
-        type_="_proofpad._tcp.local.",
-        name="ProofPad backend._proofpad._tcp.local.",
-        addresses=[socket.inet_aton(ip) for ip in ips],
-        port=port,
-        properties={"version": version},
-        server=f"{socket.gethostname().split('.')[0]}.local.",
-    )
-
-
-async def register_mdns(port: int, version: str):
-    """
-    Advertise `_proofpad._tcp.local.` with a {version} TXT record. Uses the asyncio Zeroconf API so
-    it runs on the server's event loop (the synchronous API raises EventLoopBlocked inside lifespan).
-    Returns a handle to unregister.
-    """
-    from zeroconf.asyncio import AsyncZeroconf
-
-    info = _service_info(port, version)
-    aiozc = AsyncZeroconf()
-    # allow_name_change avoids a NonUniqueNameException when a stale record lingers.
-    await aiozc.async_register_service(info, allow_name_change=True)
-    return aiozc, info
-
-
-async def unregister_mdns(handle) -> None:
-    aiozc, info = handle
-    try:
-        await aiozc.async_unregister_service(info)
-    finally:
-        await aiozc.async_close()

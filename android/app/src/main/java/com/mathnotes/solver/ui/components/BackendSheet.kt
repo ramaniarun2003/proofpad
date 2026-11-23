@@ -107,7 +107,7 @@ fun BackendSheet(
                     Text(state.url, fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = NotepadColors.Muted)
                 }
                 is BackendState.Searching -> Text("Looking for the backend…", fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Muted)
-                is BackendState.NotFound -> Text("No backend found. Make sure it's running on the same Wi-Fi, or scan its QR code.", fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.Red)
+                is BackendState.NotFound -> Text("Couldn’t reach the backend. Start it, then enter its URL or scan its QR code.", fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.Red)
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -125,7 +125,7 @@ fun BackendSheet(
                 ) { Text("Scan QR code", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
             }
 
-            Text("Or type it (last resort):", fontFamily = NotepadFonts.PatrickHand, fontSize = 15.sp, color = NotepadColors.Muted)
+            Text("Backend URL", fontFamily = NotepadFonts.PatrickHand, fontSize = 15.sp, color = NotepadColors.Muted)
             OutlinedTextField(
                 value = url,
                 onValueChange = { url = it; invalid = false },

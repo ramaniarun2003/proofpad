@@ -12,22 +12,12 @@ from .models import HealthResponse
 from .routers import export, recognize, solve
 from .services import discovery, recognition
 
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
     discovery.print_connection_block(settings.PORT, settings.APP_VERSION)
-    mdns = None
-    if settings.MDNS_ENABLED:
-        try:
-            mdns = await discovery.register_mdns(settings.PORT, settings.APP_VERSION)
-            print(f"mDNS: advertising _proofpad._tcp.local. on port {settings.PORT}", flush=True)
-        except Exception as exc:  # advertising is best-effort; the app still works without it
-            print(f"mDNS: not advertising ({type(exc).__name__}: {exc})", flush=True)
-    try:
-        yield
-    finally:
-        if mdns is not None:
-            await discovery.unregister_mdns(mdns)
+    yield
 
 
 app = FastAPI(
@@ -43,15 +33,16 @@ app.include_router(export.router)
 
 
 @app.get("/health", response_model=HealthResponse)
-async def health():
+async def health(check_mathpix: bool = False):
+    """Check the local API and optionally test the connection to Mathpix."""
     return HealthResponse(
         status="ok",
         stub_recognition=settings.STUB_RECOGNITION,
-        mathpix_reachable=await recognition.reachable(),
+        mathpix_reachable=await recognition.reachable() if check_mathpix else None,
     )
 
 
 @app.get("/discover")
 async def discover():
-    """Every URL this machine is reachable at, for the Android QR / discovery UI."""
+    """List local interface URLs for direct connections."""
     return {"urls": discovery.urls(settings.PORT), "version": settings.APP_VERSION}

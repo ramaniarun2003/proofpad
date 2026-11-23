@@ -10,7 +10,7 @@ sealed interface BackendState {
 /**
  * Pure strategy-order resolution: try each strategy's candidate URLs in order and stop at the
  * first whose probe succeeds. Android-free so it can be unit-tested with a fake prober; the
- * Android wiring (saved URL, mDNS, gateway…) lives in BackendLocator.
+ * Android wiring (saved URL, USB loopback, gateway) lives in BackendLocator.
  */
 class BackendResolver(
     private val strategies: List<Strategy>,
@@ -18,7 +18,7 @@ class BackendResolver(
     private val probe: suspend (String) -> Long?,
     private val log: (String) -> Unit = {},
 ) {
-    /** A named source of candidate base URLs (e.g. "saved", "mdns"). Candidates are tried in order. */
+    /** A named source of candidate base URLs. Candidates are tried in order. */
     data class Strategy(val name: String, val candidates: suspend () -> List<String>)
 
     data class Resolution(val strategy: String, val url: String, val latencyMs: Long)

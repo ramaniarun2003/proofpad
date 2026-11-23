@@ -86,7 +86,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(SolverUiState())
     val state: StateFlow<SolverUiState> = _state
 
-    // --- Backend connection (auto-discovered via saved/USB/mDNS/gateway; no manual typing) ---
+    // --- Backend connection ---
     private val locator = BackendLocator.get(app)
     val backend: StateFlow<BackendState> = locator.state
 

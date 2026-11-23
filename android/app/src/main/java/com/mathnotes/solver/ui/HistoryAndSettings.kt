@@ -316,7 +316,7 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> U
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Backend", style = MaterialTheme.typography.headlineSmall)
         BackendStatusRow(backend, onAutoDetect = vm::searchBackend)
-        Text("Found automatically on the same Wi-Fi (or over adb). Override here only if needed, e.g. http://192.168.1.42:8000/.")
+        Text("Enter the backend URL, such as http://192.168.1.42:8000/.")
         OutlinedTextField(
             value = url,
             onValueChange = { url = it; invalidUrl = false; edited = true },
@@ -381,7 +381,7 @@ private fun BackendStatusRow(status: BackendState, onAutoDetect: () -> Unit) {
                     Text("Connected ✓  ${status.latencyMs}ms", style = MaterialTheme.typography.bodyLarge, color = NotepadColors.Green)
                     Text(status.url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                is BackendState.NotFound -> Text("No backend found — is it running on the same Wi-Fi?", style = MaterialTheme.typography.bodyMedium, color = NotepadColors.Red)
+                is BackendState.NotFound -> Text("Couldn’t reach the backend.", style = MaterialTheme.typography.bodyMedium, color = NotepadColors.Red)
             }
         }
         if (status is BackendState.Searching) {

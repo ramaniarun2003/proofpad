@@ -58,5 +58,8 @@ The phone renders the PDF itself; replace with a server-side renderer if preferr
 ## `GET /health`
 `{"status": "ok", "stub_recognition": true|false, "mathpix_reachable": true|false|null}`
 
+Android uses this endpoint to check the local API. `mathpix_reachable` defaults to `null`.
+Use `/health?check_mathpix=true` to check Mathpix separately.
+
 ## `GET /sessions?limit=50`
 Evaluation helper: recent sessions with confidence, verification outcome and the event log.

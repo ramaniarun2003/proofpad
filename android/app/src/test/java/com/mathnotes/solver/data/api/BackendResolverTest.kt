@@ -45,11 +45,11 @@ class BackendResolverTest {
 
     @Test fun tries_candidates_within_a_strategy_in_order() = runBlocking {
         val resolver = BackendResolver(
-            strategies = listOf(strat("mdns", "http://a:8000", "http://b:8000")),
+            strategies = listOf(strat("addresses", "http://a:8000", "http://b:8000")),
             probe = prober("http://b:8000"),
         )
         val res = resolver.resolve()
-        assertEquals("mdns", res?.strategy)
+        assertEquals("addresses", res?.strategy)
         assertEquals("http://b:8000", res?.url)
     }
 
@@ -64,7 +64,7 @@ class BackendResolverTest {
     @Test fun a_strategy_that_throws_is_skipped() = runBlocking {
         val resolver = BackendResolver(
             strategies = listOf(
-                BackendResolver.Strategy("mdns") { error("NsdManager blew up") },
+                BackendResolver.Strategy("saved") { error("Couldn’t read the saved URL") },
                 strat("gateway", "http://10.0.0.1:8000"),
             ),
             probe = prober("http://10.0.0.1:8000"),
