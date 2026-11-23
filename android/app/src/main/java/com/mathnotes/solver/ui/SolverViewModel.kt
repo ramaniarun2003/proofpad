@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mathnotes.solver.data.api.ApiClient
+import com.mathnotes.solver.data.api.BackendDiscovery
 import com.mathnotes.solver.data.WelcomePrefs
 import com.mathnotes.solver.data.api.SolveResponse
 import com.mathnotes.solver.data.api.Step
@@ -54,6 +55,16 @@ data class SolverUiState(
     val suggestions: List<CorrectionSuggestion> = emptyList(),
 )
 
+private const val BACKEND_URL_PREF = "backend_url"
+
+/** Live connection state for the backend, shown on the Settings screen. */
+sealed interface BackendStatus {
+    data object Unknown : BackendStatus
+    data object Searching : BackendStatus
+    data class Connected(val url: String) : BackendStatus
+    data object NotFound : BackendStatus
+}
+
 /** Active filters for the folder-detail screen (folderId < 0 means "no folder open"). */
 data class FolderFilter(
     val folderId: Long = -1,
@@ -70,6 +81,31 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _state = MutableStateFlow(SolverUiState())
     val state: StateFlow<SolverUiState> = _state
+
+    // --- Backend connection (remembered + auto-discovered, so no manual typing) ---
+    private val _backend = MutableStateFlow<BackendStatus>(BackendStatus.Unknown)
+    val backend: StateFlow<BackendStatus> = _backend
+
+    init {
+        // Restore the last URL immediately (so a cached session still works offline), then
+        // confirm it or go hunting for the backend in the background.
+        prefs.getString(BACKEND_URL_PREF, null)?.let { ApiClient.baseUrl = it }
+        autoConnect()
+    }
+
+    /** Find and connect to the backend: saved URL → loopback/emulator → Wi-Fi sweep. */
+    fun autoConnect() {
+        viewModelScope.launch {
+            _backend.value = BackendStatus.Searching
+            val found = BackendDiscovery.discover(prefs.getString(BACKEND_URL_PREF, null))
+            _backend.value = if (found != null) {
+                persistBackend(found)
+                BackendStatus.Connected(found)
+            } else {
+                BackendStatus.NotFound
+            }
+        }
+    }
 
     val history: StateFlow<List<SessionEntity>> =
         repo.history.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -146,8 +182,27 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setBackendUrl(url: String) { ApiClient.baseUrl = url }
+    /** Manual override from Settings: validate, persist, apply, and re-check reachability. */
+    fun setBackendUrl(url: String): Boolean {
+        val normalized = ApiClient.parseBaseUrl(url) ?: return false
+        persistBackend(normalized)
+        viewModelScope.launch {
+            _backend.value = BackendStatus.Searching
+            _backend.value = if (BackendDiscovery.reachable(normalized, timeoutMs = 1500)) {
+                BackendStatus.Connected(normalized)
+            } else {
+                BackendStatus.NotFound
+            }
+        }
+        return true
+    }
+
     val backendUrl: String get() = ApiClient.baseUrl
+
+    private fun persistBackend(url: String) {
+        prefs.edit().putString(BACKEND_URL_PREF, url).apply()
+        ApiClient.baseUrl = url
+    }
 
     /** One-time welcome cover: mark it seen after "Get started", or clear it to re-demo from Settings. */
     fun markWelcomeSeen() = viewModelScope.launch { WelcomePrefs.setSeen(getApplication(), true) }

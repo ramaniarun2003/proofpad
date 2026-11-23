@@ -23,12 +23,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -301,13 +303,27 @@ internal fun DrawScope.drawCamera(color: Color) {
 @Composable
 fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> Unit = {}) {
     var url by remember { mutableStateOf(vm.backendUrl) }
+    var invalidUrl by remember { mutableStateOf(false) }
+    var edited by remember { mutableStateOf(false) }
     var debugImages by remember { mutableStateOf(vm.debugImages) }
     var adaptiveThreshold by remember { mutableStateOf(vm.useAdaptiveThreshold) }
     val handwriting by vm.handwritingSamples.collectAsState()
+    val backend by vm.backend.collectAsState()
+    // Mirror an auto-discovered URL into the field until the user starts editing it.
+    LaunchedEffect(backend) { (backend as? BackendStatus.Connected)?.let { if (!edited) url = it.url } }
+
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Backend URL", style = MaterialTheme.typography.headlineSmall)
-        Text("Laptop running uvicorn on the same Wi-Fi, e.g. http://192.168.1.42:8000/. Emulator → http://10.0.2.2:8000/.")
-        OutlinedTextField(value = url, onValueChange = { url = it }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Text("Backend", style = MaterialTheme.typography.headlineSmall)
+        BackendStatusRow(backend, onAutoDetect = vm::autoConnect)
+        Text("Found automatically on the same Wi-Fi (or over adb). Override here only if needed, e.g. http://192.168.1.42:8000/.")
+        OutlinedTextField(
+            value = url,
+            onValueChange = { url = it; invalidUrl = false; edited = true },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            isError = invalidUrl,
+            supportingText = if (invalidUrl) ({ Text("Enter a valid HTTP or HTTPS URL.") }) else null,
+        )
 
         Text("Debug", style = MaterialTheme.typography.titleMedium)
         SettingToggle(
@@ -346,7 +362,33 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> U
             OutlinedButton(onClick = { vm.clearHandwriting() }, modifier = Modifier.weight(1f), enabled = handwriting.isNotEmpty()) { Text("Clear samples") }
         }
 
-        Button(onClick = { vm.setBackendUrl(url.trim()); onDone() }, modifier = Modifier.fillMaxWidth()) { Text("Save") }
+        Button(
+            onClick = { if (vm.setBackendUrl(url)) onDone() else invalidUrl = true },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Save") }
+    }
+}
+
+/** Connection status line for the backend, with a re-scan button. */
+@Composable
+private fun BackendStatusRow(status: BackendStatus, onAutoDetect: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.weight(1f)) {
+            when (status) {
+                is BackendStatus.Searching -> Text("Looking for the backend…", style = MaterialTheme.typography.bodyMedium)
+                is BackendStatus.Connected -> {
+                    Text("Connected ✓", style = MaterialTheme.typography.bodyLarge, color = NotepadColors.Green)
+                    Text(status.url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                is BackendStatus.NotFound -> Text("No backend found — is it running on the same Wi-Fi?", style = MaterialTheme.typography.bodyMedium, color = NotepadColors.Red)
+                is BackendStatus.Unknown -> Text("Not connected yet.", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        if (status is BackendStatus.Searching) {
+            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+        } else {
+            OutlinedButton(onClick = onAutoDetect) { Text("Auto-detect") }
+        }
     }
 }
 
