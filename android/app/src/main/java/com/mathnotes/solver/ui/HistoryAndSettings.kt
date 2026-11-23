@@ -363,6 +363,20 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> U
             OutlinedButton(onClick = { vm.clearHandwriting() }, modifier = Modifier.weight(1f), enabled = handwriting.isNotEmpty()) { Text("Clear samples") }
         }
 
+        var useCorrections by remember { mutableStateOf(vm.useCorrections) }
+        SettingToggle(
+            label = "Use my handwriting corrections",
+            help = "Apply the per-user correction map to Mathpix results before solving.",
+            checked = useCorrections,
+            onChange = { useCorrections = it; vm.useCorrections = it },
+        )
+        var rebuildMsg by remember { mutableStateOf<String?>(null) }
+        OutlinedButton(
+            onClick = { vm.rebuildCorrectionRules { rebuildMsg = it } },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = handwriting.isNotEmpty(),
+        ) { Text(rebuildMsg ?: "Rebuild rules") }
+
         Button(
             onClick = { if (vm.setBackendUrl(url)) onDone() else invalidUrl = true },
             modifier = Modifier.fillMaxWidth(),

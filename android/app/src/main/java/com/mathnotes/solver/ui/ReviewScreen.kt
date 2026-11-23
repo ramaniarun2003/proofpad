@@ -22,8 +22,13 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -119,7 +124,10 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
                 ) {
                     Column(Modifier.weight(1f)) {
                         NotepadLabel("I read this as", fontSize = 16)
-                        LatexView(state.latex, Modifier.padding(top = 4.dp), textSizePx = 56f)
+                        // Long-press to compare against the raw Mathpix string (before corrections).
+                        RawLatexTooltip(state.rawLatex) {
+                            LatexView(state.latex, Modifier.padding(top = 4.dp), textSizePx = 56f)
+                        }
                     }
                     ConfidencePill(state.confidence, state.lowConfidence)
                 }
@@ -219,6 +227,18 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
             ) { Text("Check my steps", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
         }
     }
+}
+
+/** Wraps [content] so a long-press shows the raw Mathpix LaTeX (before the correction map). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RawLatexTooltip(raw: String, content: @Composable () -> Unit) {
+    if (raw.isBlank()) { content(); return }
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        tooltip = { PlainTooltip { Text("Mathpix read:  $raw") } },
+        state = rememberTooltipState(isPersistent = false),
+    ) { content() }
 }
 
 @Composable

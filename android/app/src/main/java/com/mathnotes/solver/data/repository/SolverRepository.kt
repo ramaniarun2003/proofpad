@@ -3,6 +3,7 @@ package com.mathnotes.solver.data.repository
 import android.content.Context
 import android.provider.Settings
 import com.mathnotes.solver.data.api.ApiClient
+import com.mathnotes.solver.data.api.PageRecognizeResponse
 import com.mathnotes.solver.data.api.RecognizeResponse
 import com.mathnotes.solver.data.api.SolveRequest
 import com.mathnotes.solver.data.api.SolveResponse
@@ -40,16 +41,25 @@ class SolverRepository(context: Context) {
 
     val history: Flow<List<SessionEntity>> = dao.observeAll()
 
+    private val prefs = app.getSharedPreferences("solver_settings", android.content.Context.MODE_PRIVATE)
+    /** Kill switch for the per-user correction map; default on, toggled in Settings. */
+    var useCorrections: Boolean
+        get() = prefs.getBoolean("use_corrections", true)
+        set(v) { prefs.edit().putBoolean("use_corrections", v).apply() }
+
+    /** The recognizer's output plus the raw (pre-correction) LaTeX, for the Review tooltip. */
+    data class RecognizeResult(val response: RecognizeResponse, val rawLatex: String)
+
     /**
-     * Upload an image for recognition. [persist] mirrors the result into a Room session so it
+     * Upload one expression (mode=formula). [persist] mirrors the result into a Room session so it
      * shows in History; the handwriting setup wizard passes false so its page scans stay out of it.
      */
-    suspend fun recognize(imageFile: File, persist: Boolean = true): RecognizeResponse = withContext(Dispatchers.IO) {
+    suspend fun recognize(imageFile: File, persist: Boolean = true): RecognizeResult = withContext(Dispatchers.IO) {
         val part = MultipartBody.Part.createFormData(
             "image", imageFile.name, imageFile.asRequestBody("image/jpeg".toMediaType())
         )
         val resp = api.recognize(part, deviceId.toRequestBody("text/plain".toMediaType()))
-        val corrected = if (persist) correctLatex(resp.latex, resp.confidence) else resp.latex
+        val corrected = correctLatex(resp.latex, resp.confidence)
         if (persist) {
             dao.upsert(
                 SessionEntity(
@@ -61,32 +71,56 @@ class SolverRepository(context: Context) {
                 )
             )
         }
-        resp.copy(latex = corrected)
+        RecognizeResult(resp.copy(latex = corrected), rawLatex = resp.latex)
+    }
+
+    /** Upload a whole page (mode=page): per-line LaTeX + pixel bboxes. Never persisted to History. */
+    suspend fun recognizePage(imageFile: File): PageRecognizeResponse = withContext(Dispatchers.IO) {
+        val part = MultipartBody.Part.createFormData(
+            "image", imageFile.name, imageFile.asRequestBody("image/jpeg".toMediaType())
+        )
+        api.recognizePage(
+            part,
+            deviceId.toRequestBody("text/plain".toMediaType()),
+            "page".toRequestBody("text/plain".toMediaType()),
+        )
     }
 
     /**
-     * Apply the per-user correction map (built from the handwriting samples) to a recognizer
-     * result before it is shown/solved, keeping the backend stateless. With no samples yet, the
-     * built-in default `\times`→`x` heuristic stands in. Every rewrite is logged for the demo.
+     * Apply the per-user correction map (built from the handwriting samples) to a recognizer result
+     * before it is shown/solved, keeping the backend stateless. With no samples the built-in
+     * `\times`→`x` heuristic stands in. The kill switch disables it entirely. Logs raw → corrected
+     * and the rules that fired at INFO on every result.
      */
     private suspend fun correctLatex(latex: String, confidence: Double): String {
+        if (!useCorrections) {
+            Timber.i("recognize: raw=%s | corrections OFF", latex)
+            return latex
+        }
         val samples = handwritingDao.getAll()
         val base = if (samples.isEmpty()) {
             DefaultRules.correctTimes(latex, confidence, DefaultRules.looksParseable(latex))
-                .also { if (it != latex) Timber.d("correction(default): \\times -> x  |  %s -> %s", latex, it) }
         } else {
             latex
         }
         val result = CorrectionMap.fromSamples(samples).applyTo(base)
-        result.rewrites.forEach { r ->
-            Timber.d("correction(user): %s -> %s%s", r.from, r.to, r.context?.let { " after $it" } ?: "")
-        }
+        val fired = result.rewrites.joinToString(", ") { "${it.from}->${it.to}${it.context?.let { c -> "@$c" } ?: ""}" }
+        Timber.i("recognize: raw=%s | corrected=%s | rules=[%s]", latex, result.latex, fired)
         return result.latex
     }
 
     /** SUGGEST-mode rules whose from-token appears in [latex]; shown on Review for a one-tap swap. */
     suspend fun suggestionsFor(latex: String): List<CorrectionSuggestion> = withContext(Dispatchers.IO) {
+        if (!useCorrections) return@withContext emptyList()
         CorrectionMap.fromSamples(handwritingDao.getAll()).suggestionsFor(latex)
+    }
+
+    /** Recompute the correction map now (Settings "Rebuild rules"); returns a short human summary. */
+    suspend fun rebuildCorrectionRules(): String = withContext(Dispatchers.IO) {
+        val rules = CorrectionMap.fromSamples(handwritingDao.getAll()).rules
+        val apply = rules.count { it.mode.name == "APPLY" }
+        Timber.i("rebuilt correction rules: %d apply, %d suggest", apply, rules.size - apply)
+        "${rules.size} rules ($apply applied, ${rules.size - apply} suggested)"
     }
 
     suspend fun solve(sessionId: String, latex: String, topic: String): SolveResponse = withContext(Dispatchers.IO) {

@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mathnotes.solver.data.WelcomePrefs
+import com.mathnotes.solver.data.api.PageRecognizeResponse
 import com.mathnotes.solver.data.db.HandwritingSample
 import com.mathnotes.solver.data.handwriting.CorrectionMap
 import com.mathnotes.solver.data.repository.HandwritingRepository
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 
@@ -32,6 +34,8 @@ data class SetupLine(
     val correctedLatex: String? = null,
     val cropPath: String? = null,
     val confidence: Float = 0f,
+    /** True when the page read didn't produce a line here (3–4 lines came back): retake just this one. */
+    val notFound: Boolean = false,
 ) {
     /** What the user says they actually wrote, if they corrected it; otherwise the recognizer's read. */
     val effectiveLatex: String get() = correctedLatex ?: recognizedLatex
@@ -83,35 +87,39 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
         },
     ).phrasings(3)
 
+    private val debug: Boolean get() =
+        getApplication<Application>().getSharedPreferences("solver_settings", android.content.Context.MODE_PRIVATE)
+            .getBoolean("debug_images", false)
+
     /**
-     * Preprocess the captured page, recognize it as one multi-line image, split into five
-     * lines and slice the page into five strips for thumbnails. Fewer than three lines →
-     * [SetupEvent.Error] (the caller stays on capture); success → [SetupEvent.Recognized].
+     * Preprocess the whole page (no single-problem crop) and recognize it with Mathpix line_data
+     * (mode=page): each line comes back separately with a pixel bbox, which we crop for the thumbnail.
+     * Fewer than three lines → [SetupEvent.Error] (stay on capture). 3–4 → continue; the missing rows
+     * are marked "not found" for a single-line retake. Success → [SetupEvent.Recognized].
      */
-    fun capturePage(raw: File, crop: CropSpec) {
+    fun capturePage(raw: File) {
         _state.update { it.copy(busy = true, status = "Reading your page…") }
         viewModelScope.launch {
             try {
-                val page = withContext(Dispatchers.Default) { Preprocessor.process(getApplication(), raw, crop) }
-                val resp = solver.recognize(page, persist = false)
-                val rawLines = SetupMatching.splitLines(resp.latex)
-                if (rawLines.size < 3) {
+                val page = withContext(Dispatchers.Default) { Preprocessor.processPage(getApplication(), raw, debug) }
+                val resp = solver.recognizePage(page)
+                Timber.i("setup page recognize: %d lines, image %dx%d", resp.lines.size, resp.imageW, resp.imageH)
+                if (resp.lines.size < 3) {
                     _state.update { it.copy(busy = false, status = "") }
-                    _events.emit(SetupEvent.Error("I could only find ${rawLines.size} lines, try again with the page flat"))
+                    _events.emit(SetupEvent.Error("I could only find ${resp.lines.size} lines, try again with the page flat"))
                     return@launch
                 }
-                val n = HandwritingRepository.EXPECTED.size
-                val recognized = (0 until n).map { rawLines.getOrElse(it) { "" } }   // pad/truncate to five
-                val crops = withContext(Dispatchers.Default) { sliceStrips(page, n) }
+                val crops = withContext(Dispatchers.Default) { cropBboxThumbnails(page, resp) }
                 _state.update { s ->
                     s.copy(
                         busy = false, status = "", pageImagePath = page.absolutePath,
                         lines = s.lines.mapIndexed { i, line ->
-                            line.copy(
-                                recognizedLatex = recognized[i],
-                                correctedLatex = null,
-                                cropPath = crops.getOrNull(i),
-                                confidence = resp.confidence.toFloat(),
+                            val read = resp.lines.getOrNull(i)
+                            if (read != null) line.copy(
+                                recognizedLatex = read.latex, correctedLatex = null,
+                                cropPath = crops.getOrNull(i), confidence = read.confidence.toFloat(), notFound = false,
+                            ) else line.copy(
+                                recognizedLatex = "", correctedLatex = null, cropPath = null, confidence = 0f, notFound = true,
                             )
                         },
                     )
@@ -124,14 +132,46 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** The user confirms what they actually wrote on a mismatched row. */
-    fun setCorrection(index: Int, latex: String) = _state.update { s ->
-        s.copy(lines = s.lines.mapIndexed { i, line -> if (i == index) line.copy(correctedLatex = latex) else line })
+    private var retakeIndex: Int = -1
+
+    /** Enter single-line retake for a "not found" row; the next formula capture fills it. */
+    fun beginRetake(index: Int) { retakeIndex = index }
+
+    /** Fill the retake row from a single-line formula-mode capture. */
+    fun fillRetakeLine(raw: File, crop: CropSpec) {
+        val index = retakeIndex
+        if (index !in _state.value.lines.indices) return
+        _state.update { it.copy(busy = true, status = "Reading that line…") }
+        viewModelScope.launch {
+            try {
+                val clean = withContext(Dispatchers.Default) { Preprocessor.process(getApplication(), raw, crop, debug) }
+                val result = solver.recognize(clean, persist = false)
+                val thumb = withContext(Dispatchers.Default) { copyThumb(clean, index) }
+                _state.update { s ->
+                    s.copy(busy = false, status = "", lines = s.lines.mapIndexed { i, line ->
+                        if (i == index) line.copy(
+                            recognizedLatex = result.response.latex, correctedLatex = null,
+                            cropPath = thumb, confidence = result.response.confidence.toFloat(), notFound = false,
+                        ) else line
+                    })
+                }
+                retakeIndex = -1
+                _events.emit(SetupEvent.Recognized)
+            } catch (e: Exception) {
+                _state.update { it.copy(busy = false, status = "") }
+                _events.emit(SetupEvent.Error(e.message ?: "Couldn't read that line, try again"))
+            }
+        }
     }
 
-    /** Persist the five samples to Room (called from the done screen's save action). */
+    /** The user confirms what they actually wrote on a mismatched row. */
+    fun setCorrection(index: Int, latex: String) = _state.update { s ->
+        s.copy(lines = s.lines.mapIndexed { i, line -> if (i == index) line.copy(correctedLatex = latex, notFound = false) else line })
+    }
+
+    /** Persist the captured samples to Room (skipping any line the page read never found). */
     fun saveSamples() {
-        val lines = _state.value.lines
+        val lines = _state.value.lines.filter { it.recognizedLatex.isNotBlank() }
         viewModelScope.launch {
             handwriting.saveSamples(
                 lines.map {
@@ -153,22 +193,37 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
     /** Onboarding flag: set when the wizard finishes or is skipped; cleared to re-run it. */
     fun markSetupComplete() = viewModelScope.launch { WelcomePrefs.setSetupComplete(getApplication(), true) }
 
-    /** Slice the page bitmap into [n] equal horizontal strips, saved as JPEGs for the thumbnails. */
-    private fun sliceStrips(page: File, n: Int): List<String> {
+    /** Crop each line's thumbnail straight from its bbox (with 8% padding), clamped to the image. */
+    private fun cropBboxThumbnails(page: File, resp: PageRecognizeResponse): List<String?> {
         val bmp = BitmapFactory.decodeFile(page.absolutePath) ?: return emptyList()
         val dir = File(getApplication<Application>().filesDir, "handwriting").apply { mkdirs() }
-        val stripH = bmp.height / n
         val stamp = page.nameWithoutExtension
-        val paths = (0 until n).map { i ->
-            val top = i * stripH
-            val h = if (i == n - 1) bmp.height - top else stripH
-            val strip = Bitmap.createBitmap(bmp, 0, top, bmp.width, h)
-            val f = File(dir, "strip_${stamp}_$i.jpg")
-            FileOutputStream(f).use { strip.compress(Bitmap.CompressFormat.JPEG, 85, it) }
-            strip.recycle()
+        val paths = resp.lines.mapIndexed { i, line ->
+            val b = line.bbox
+            if (b.size < 4) return@mapIndexed null
+            val padX = ((b[2] - b[0]) * 0.08f).toInt()
+            val padY = ((b[3] - b[1]) * 0.08f).toInt()
+            val left = (b[0] - padX).coerceIn(0, bmp.width - 1)
+            val top = (b[1] - padY).coerceIn(0, bmp.height - 1)
+            val right = (b[2] + padX).coerceIn(left + 1, bmp.width)
+            val bottom = (b[3] + padY).coerceIn(top + 1, bmp.height)
+            val crop = Bitmap.createBitmap(bmp, left, top, right - left, bottom - top)
+            val f = File(dir, "line_${stamp}_$i.jpg")
+            FileOutputStream(f).use { crop.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+            crop.recycle()
             f.absolutePath
         }
         bmp.recycle()
         return paths
+    }
+
+    /** Copy a preprocessed single-line image as a retake thumbnail. */
+    private fun copyThumb(src: File, index: Int): String? {
+        val bmp = BitmapFactory.decodeFile(src.absolutePath) ?: return null
+        val dir = File(getApplication<Application>().filesDir, "handwriting").apply { mkdirs() }
+        val f = File(dir, "retake_${src.nameWithoutExtension}_$index.jpg")
+        FileOutputStream(f).use { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+        bmp.recycle()
+        return f.absolutePath
     }
 }

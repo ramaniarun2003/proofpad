@@ -50,7 +50,7 @@ private val THUMB_TILTS = listOf(-3f, 2f, -2f, 3f, -1.5f)
  * line against a thumbnail of the strip, flags mismatches, and lets the user tap to correct.
  */
 @Composable
-fun SetupCheckScreen(setupVm: SetupViewModel, onRetake: () -> Unit, onSave: () -> Unit) {
+fun SetupCheckScreen(setupVm: SetupViewModel, onRetake: () -> Unit, onSave: () -> Unit, onRetakeLine: (Int) -> Unit = {}) {
     val state by setupVm.state.collectAsState()
     var editing by remember { mutableStateOf<Int?>(null) }
     val correct = state.lines.count { it.isMatch }
@@ -80,7 +80,7 @@ fun SetupCheckScreen(setupVm: SetupViewModel, onRetake: () -> Unit, onSave: () -
                     .heightIn(min = 86.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .background(if (match) androidx.compose.ui.graphics.Color.Transparent else NotepadColors.Red.copy(alpha = 0.07f))
-                    .clickable { editing = i }
+                    .clickable { if (line.notFound) onRetakeLine(i) else editing = i }
                     .padding(horizontal = 4.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -103,8 +103,16 @@ fun SetupCheckScreen(setupVm: SetupViewModel, onRetake: () -> Unit, onSave: () -
                     }
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    LatexView(line.effectiveLatex.ifBlank { "?" }, textSizePx = with(LocalDensity.current) { 22.sp.toPx() })
-                    if (!match) MismatchDetail(expected = line.expectedLatex, recognized = line.effectiveLatex)
+                    if (line.notFound) {
+                        LatexView(line.expectedLatex, textSizePx = with(LocalDensity.current) { 20.sp.toPx() })
+                        Text(
+                            "not found, tap to retake just this line",
+                            fontFamily = NotepadFonts.PatrickHand, fontSize = 13.sp, color = NotepadColors.Red,
+                        )
+                    } else {
+                        LatexView(line.effectiveLatex.ifBlank { "?" }, textSizePx = with(LocalDensity.current) { 22.sp.toPx() })
+                        if (!match) MismatchDetail(expected = line.expectedLatex, recognized = line.effectiveLatex)
+                    }
                 }
             }
         }
