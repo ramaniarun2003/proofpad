@@ -3,6 +3,8 @@ package com.mathnotes.solver.data.api
 /** Live connection state for the backend. */
 sealed interface BackendState {
     data object Searching : BackendState
+    /** Cold-starting the free public instance (can take up to ~60s). */
+    data object WakingUp : BackendState
     data class Connected(val url: String, val latencyMs: Long) : BackendState
     data object NotFound : BackendState
 }
