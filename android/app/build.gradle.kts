@@ -19,7 +19,7 @@ android {
         versionCode = 1
         versionName = "0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // Backend on the demo LAN. Override per machine, in precedence order:
+        // Resolve the backend URL in this order.
         //   1. -PBACKEND_URL=http://host:8000/ on the Gradle command line
         //   2. BACKEND_URL=http://192.168.1.42:8000/ in local.properties (not committed)
         //   3. the emulator default below
@@ -33,12 +33,7 @@ android {
             ?: "http://10.0.2.2:8000/"
         buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
 
-        // Public deployment (Render). Placeholders live in gradle.properties; put the real URL and
-        // key in local.properties (gitignored), which wins here.
-        val publicBackendUrl = localProps.getProperty("PUBLIC_BACKEND_URL")
-            ?: (project.findProperty("PUBLIC_BACKEND_URL") as String?)
-            ?: "https://proofpad-backend.onrender.com"
-        buildConfigField("String", "PUBLIC_BACKEND_URL", "\"$publicBackendUrl\"")
+        // Set the API key for a deployed backend in local.properties (gitignored).
         val proofpadApiKey = localProps.getProperty("PROOFPAD_API_KEY")
             ?: (project.findProperty("PROOFPAD_API_KEY") as String?)
             ?: ""

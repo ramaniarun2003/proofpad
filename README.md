@@ -76,12 +76,10 @@ Host the backend publicly so the app works from campus Wi-Fi without the laptop.
 3. **Confirm it's up:** `curl https://<service>.onrender.com/health` → `{"status":"ok",...}`.
    Protected routes without the key return `401`:
    `curl -H "X-ProofPad-Key: <key>" https://<service>.onrender.com/discover`.
-4. **Point the app at it:** put the real URL and key in `android/local.properties` (gitignored):
-   `PUBLIC_BACKEND_URL=https://<service>.onrender.com` and `PROOFPAD_API_KEY=<key>`, then rebuild.
-   The app tries saved → USB → mDNS → gateway → this public URL last, so on-LAN it still prefers the laptop.
+4. **Point the app at it.** Add `BACKEND_URL=https://<service>.onrender.com/` and
+   `PROOFPAD_API_KEY=<key>` to `android/local.properties` (gitignored), then rebuild the app.
 5. **Keep it warm:** the free instance sleeps after ~15 min. `.github/workflows/keepwarm.yml` pings
    `/health` every 10 min during class hours — set the repo variable `PROOFPAD_URL` to your Render URL.
-   First request after a sleep takes up to ~60s (the app shows "waking up…").
 
    > **Disk note:** Render's *free* plan has no persistent disk, so `/data` is ephemeral — the SQLite
    > file resets on each redeploy. That's fine here (the phone caches every session in Room), and the

@@ -44,8 +44,8 @@ object WelcomePrefs {
         context.welcomeDataStore.edit { it[SETUP_DONE] = complete }
     }
 
-    // The last backend URL that answered a health check.
-    private val LAST_BACKEND = stringPreferencesKey("last_backend_url")
+    // The old cache could contain a URL selected by the automatic Render fallback.
+    private val LAST_BACKEND = stringPreferencesKey("last_backend_url_v2")
 
     suspend fun lastBackendUrl(context: Context): String? =
         context.welcomeDataStore.data.map { it[LAST_BACKEND] }.first()
