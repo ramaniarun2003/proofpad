@@ -79,23 +79,50 @@ class BackendLocator private constructor(private val app: Context) {
             _state.value = BackendState.Searching
             val res = resolver.resolve()
             if (res != null) {
-                currentBaseUrl = (res.url.trimEnd('/') + "/").toHttpUrlOrNull()
-                _state.value = BackendState.Connected(res.url, res.latencyMs)
-                WelcomePrefs.setLastBackendUrl(app, res.url)
-                Timber.tag("BackendLocator").i("connected via %s: %s (%dms)", res.strategy, res.url, res.latencyMs)
-            } else {
-                _state.value = BackendState.NotFound
-                Timber.tag("BackendLocator").w("no backend found after all strategies")
+                onConnected(res.url, res.strategy, res.latencyMs)
+                return@launch
             }
+            // Last resort: the public Render URL. It can cold-start for up to ~60s, so poll /health
+            // every 5s for up to 75s (showing "waking up…") rather than giving up after one probe.
+            val publicUrl = BuildConfig.PUBLIC_BACKEND_URL.trim().trimEnd('/')
+            if (publicUrl.isNotBlank()) {
+                _state.value = BackendState.WakingUp
+                val deadline = SystemClock.elapsedRealtime() + 75_000
+                while (SystemClock.elapsedRealtime() < deadline) {
+                    val latency = probe(publicUrl, publicProbeClient)
+                    Timber.tag("BackendLocator").d("try public: %s -> %s", publicUrl, latency?.let { "${it}ms ✓" } ?: "waking…")
+                    if (latency != null) { onConnected(publicUrl, "public", latency); return@launch }
+                    delay(5_000)
+                }
+            }
+            _state.value = BackendState.NotFound
+            Timber.tag("BackendLocator").w("no backend found after all strategies")
         }
     }
 
-    /** GET `<base>/health`; latency in ms if it answers as *this* backend within 1.5s, else null. */
-    private suspend fun probe(base: String): Long? = withContext(Dispatchers.IO) {
+    private suspend fun onConnected(url: String, strategy: String, latencyMs: Long) {
+        currentBaseUrl = (url.trimEnd('/') + "/").toHttpUrlOrNull()
+        _state.value = BackendState.Connected(url, latencyMs)
+        WelcomePrefs.setLastBackendUrl(app, url)
+        Timber.tag("BackendLocator").i("connected via %s: %s (%dms)", strategy, url, latencyMs)
+    }
+
+    /** A longer-timeout client for the public URL, whose first (cold-start) response can be slow. */
+    private val publicProbeClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(12, TimeUnit.SECONDS)
+            .readTimeout(12, TimeUnit.SECONDS)
+            .callTimeout(12, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(false)
+            .build()
+    }
+
+    /** GET `<base>/health`; latency in ms if it answers as *this* backend in time, else null. */
+    private suspend fun probe(base: String, client: OkHttpClient = probeClient): Long? = withContext(Dispatchers.IO) {
         val url = base.trimEnd('/') + "/health"
         val start = SystemClock.elapsedRealtime()
         runCatching {
-            probeClient.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+            client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
                 // Require this backend's health shape so the unrelated :8000 squatter is skipped.
                 if (resp.isSuccessful && resp.body?.string()?.contains("stub_recognition") == true) {
                     SystemClock.elapsedRealtime() - start

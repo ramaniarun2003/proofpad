@@ -32,6 +32,17 @@ android {
             ?: localProps.getProperty("BACKEND_URL")
             ?: "http://10.0.2.2:8000/"
         buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
+
+        // Public deployment (Render). Placeholders live in gradle.properties; put the real URL and
+        // key in local.properties (gitignored), which wins here.
+        val publicBackendUrl = localProps.getProperty("PUBLIC_BACKEND_URL")
+            ?: (project.findProperty("PUBLIC_BACKEND_URL") as String?)
+            ?: "https://proofpad-backend.onrender.com"
+        buildConfigField("String", "PUBLIC_BACKEND_URL", "\"$publicBackendUrl\"")
+        val proofpadApiKey = localProps.getProperty("PROOFPAD_API_KEY")
+            ?: (project.findProperty("PROOFPAD_API_KEY") as String?)
+            ?: ""
+        buildConfigField("String", "PROOFPAD_API_KEY", "\"$proofpadApiKey\"")
     }
 
     buildTypes {

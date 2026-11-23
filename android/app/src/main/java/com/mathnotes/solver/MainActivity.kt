@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -24,6 +25,7 @@ import com.mathnotes.solver.ui.SolverViewModel
 import com.mathnotes.solver.ui.WelcomeScreen
 import com.mathnotes.solver.ui.setup.SetupCheckScreen
 import com.mathnotes.solver.ui.setup.SetupDoneScreen
+import com.mathnotes.solver.ui.setup.SetupEvent
 import com.mathnotes.solver.ui.setup.SetupViewModel
 import com.mathnotes.solver.ui.setup.SetupWriteScreen
 import com.mathnotes.solver.ui.theme.NotepadTheme
@@ -77,6 +79,18 @@ class MainActivity : ComponentActivity() {
                                 setupVm,
                                 onRetake = { nav.popBackStack("setupCapture", inclusive = false) },
                                 onSave = { setupVm.saveSamples(); nav.navigate("setupDone") },
+                                onRetakeLine = { idx -> setupVm.beginRetake(idx); nav.navigate("setupRetake") },
+                            )
+                        }
+                        composable("setupRetake") {
+                            // Single-line retake (formula mode) for a line the page read missed.
+                            LaunchedEffect(Unit) {
+                                setupVm.events.collect { if (it is SetupEvent.Recognized) nav.popBackStack("setupCheck", inclusive = false) }
+                            }
+                            CaptureScreen(
+                                vm,
+                                onCaptured = {}, onGalleryPicked = {}, onHistory = {}, onGallery = {}, onSettings = {},
+                                onFormulaCaptured = { f, crop -> setupVm.fillRetakeLine(f, crop) },
                             )
                         }
                         composable("setupDone") {

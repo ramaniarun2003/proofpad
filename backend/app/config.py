@@ -22,10 +22,18 @@ class Settings:
     )
     STUB_LATEX: str = os.getenv("STUB_LATEX", r"\frac{d}{dx} x^{2} \sin(x)")
 
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./data/solver.db")
-    STORAGE_DIR: Path = Path(os.getenv("STORAGE_DIR", "./data/files"))
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./data/proofpad.db")
+    STORAGE_DIR: Path = Path(os.getenv("FILES_DIR", os.getenv("STORAGE_DIR", "./files")))
     MAX_IMAGE_BYTES: int = int(os.getenv("MAX_IMAGE_BYTES", str(2 * 1024 * 1024)))
     LOW_CONFIDENCE: float = float(os.getenv("LOW_CONFIDENCE", "0.6"))
+
+    # Shared secret for the public deployment: every request except /health must send it as
+    # X-ProofPad-Key. Empty = unauthenticated (local dev); set in prod so the URL can't burn credit.
+    PROOFPAD_API_KEY: str = os.getenv("PROOFPAD_API_KEY", "")
+
+    # Shared secret for the public deployment: every request except /health must send it as
+    # X-ProofPad-Key. Empty = unauthenticated (local dev); set in prod so the URL can't burn credit.
+    PROOFPAD_API_KEY: str = os.getenv("PROOFPAD_API_KEY", "")
 
     # Connection details shown at startup and returned by /discover.
     APP_VERSION: str = "0.1.0"

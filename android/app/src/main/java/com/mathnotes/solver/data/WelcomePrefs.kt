@@ -3,6 +3,7 @@ package com.mathnotes.solver.data
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
@@ -51,5 +52,20 @@ object WelcomePrefs {
 
     suspend fun setLastBackendUrl(context: Context, url: String) {
         context.welcomeDataStore.edit { it[LAST_BACKEND] = url }
+    }
+
+    // Correction-rule schema. Bump when a change invalidates existing samples/rules; the first run
+    // after an upgrade clears them (the pre-line_data page read produced unreliable samples).
+    private const val CURRENT_RULES_SCHEMA = 2
+    private val RULES_SCHEMA = intPreferencesKey("rules_schema")
+
+    /** True exactly once after upgrading to a new rules schema; records the bump so it won't re-fire. */
+    suspend fun consumeRuleResetNeeded(context: Context): Boolean {
+        val stored = context.welcomeDataStore.data.map { it[RULES_SCHEMA] ?: 1 }.first()
+        if (stored < CURRENT_RULES_SCHEMA) {
+            context.welcomeDataStore.edit { it[RULES_SCHEMA] = CURRENT_RULES_SCHEMA }
+            return true
+        }
+        return false
     }
 }

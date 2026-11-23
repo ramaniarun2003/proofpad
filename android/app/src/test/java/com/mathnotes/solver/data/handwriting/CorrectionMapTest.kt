@@ -26,28 +26,44 @@ class CorrectionMapTest {
             ),
         )
 
+        // z→2 has two supporting samples → safe to auto-apply.
         val z = rule(map, "z", "^")!!
         assertEquals("2", z.toToken)
         assertEquals(2, z.support)
         assertEquals(RuleMode.APPLY, z.mode)
 
+        // l→1 and \times→x have only one sample each → suggest only, not auto-applied.
         val l = rule(map, "l", null)!!
         assertEquals("1", l.toToken)
-        assertEquals(RuleMode.APPLY, l.mode)
+        assertEquals(RuleMode.SUGGEST, l.mode)
 
         val times = rule(map, "\\times", null)!!
         assertEquals("x", times.toToken)
-        assertEquals(RuleMode.APPLY, times.mode)
+        assertEquals(RuleMode.SUGGEST, times.mode)
 
         // The correctly-read line adds no rule.
         assertEquals(3, map.rules.size)
     }
 
     @Test fun applies_rules_preserving_surrounding_latex() {
-        val map = CorrectionMap.build(listOf("""\frac{e^x}{\times+1}""" to """\frac{e^x}{x+1}"""))
+        // Two samples back \times→x, so it auto-applies.
+        val map = CorrectionMap.build(
+            listOf(
+                """\frac{e^x}{\times+1}""" to """\frac{e^x}{x+1}""",
+                """a \times b""" to """a x b""",
+            ),
+        )
         val out = map.applyTo("""\frac{a^b}{\times+1}""")
         assertEquals("""\frac{a^b}{x+1}""", out.latex)
         assertEquals(1, out.rewrites.size)
+    }
+
+    @Test fun a_single_supporting_sample_is_only_a_suggestion() {
+        val map = CorrectionMap.build(listOf("""a \times b""" to """a x b"""))
+        val times = rule(map, "\\times", null)!!
+        assertEquals(1, times.support)
+        assertEquals(RuleMode.SUGGEST, times.mode)
+        assertEquals("""c \times d""", map.applyTo("""c \times d""").latex)  // not applied
     }
 
     // --- Contradiction handling ---
@@ -68,9 +84,11 @@ class CorrectionMapTest {
     // --- Context: a rule learned after ^ only fires after ^ ---
 
     @Test fun context_rule_only_fires_after_a_power() {
-        val map = CorrectionMap.build(listOf("""x^z""" to """x^2"""))
+        // Two samples so z→2@^ auto-applies.
+        val map = CorrectionMap.build(listOf("""x^z""" to """x^2""", """y^z""" to """y^2"""))
         val z = rule(map, "z", "^")!!
         assertEquals("^", z.context)
+        assertEquals(RuleMode.APPLY, z.mode)
         // Only the z that follows ^ is rewritten; the leading z is left alone.
         assertEquals("""z^2""", map.applyTo("""z^z""").latex)
         assertEquals("z", map.applyTo("z").latex)
@@ -79,12 +97,22 @@ class CorrectionMapTest {
     @Test fun builds_truth_from_correction_then_expected() {
         val map = CorrectionMap.fromSamples(
             listOf(
-                HandwritingSample(expectedLatex = """x+1""", recognizedLatex = """x+l""", correctedLatex = """x+1"""),
-                HandwritingSample(expectedLatex = """n^2""", recognizedLatex = """n^z""", correctedLatex = null),
+                HandwritingSample(expectedLatex = """x+1""", recognizedLatex = """x+l""", correctedLatex = """x+1""", confidence = 0.9f),
+                HandwritingSample(expectedLatex = """n^2""", recognizedLatex = """n^z""", correctedLatex = null, confidence = 0.9f),
             ),
         )
         assertEquals("1", rule(map, "l", null)?.toToken)
         assertEquals("2", rule(map, "z", "^")?.toToken)
+    }
+
+    @Test fun low_confidence_samples_are_discarded() {
+        val map = CorrectionMap.fromSamples(
+            listOf(
+                HandwritingSample(expectedLatex = """x^2""", recognizedLatex = """x^z""", confidence = 0.5f),
+                HandwritingSample(expectedLatex = """y^2""", recognizedLatex = """y^z""", confidence = 0.4f),
+            ),
+        )
+        assertTrue(map.rules.isEmpty())
     }
 
     @Test fun phrasings_read_in_plain_words() {

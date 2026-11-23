@@ -26,6 +26,15 @@ interface ApiService {
         @Part("device_id") deviceId: RequestBody,
     ): RecognizeResponse
 
+    /** mode=page: a whole page of lines, each with a pixel bbox (handwriting setup wizard). */
+    @Multipart
+    @POST("recognize")
+    suspend fun recognizePage(
+        @Part image: MultipartBody.Part,
+        @Part("device_id") deviceId: RequestBody,
+        @Part("mode") mode: RequestBody,
+    ): PageRecognizeResponse
+
     @POST("solve")
     suspend fun solve(@Body body: SolveRequest): SolveResponse
 
@@ -57,6 +66,16 @@ object ApiClient {
             .readTimeout(30, TimeUnit.SECONDS)      // Mathpix + SymPy can take a few seconds
             .retryOnConnectionFailure(true)
             .addInterceptor(HostRewriteInterceptor { BackendLocator.peek()?.currentBaseUrl })
+            .addInterceptor { chain ->
+                // Shared secret for the public deployment; empty on LAN-only builds.
+                val key = BuildConfig.PROOFPAD_API_KEY
+                val request = if (key.isNotBlank()) {
+                    chain.request().newBuilder().header("X-ProofPad-Key", key).build()
+                } else {
+                    chain.request()
+                }
+                chain.proceed(request)
+            }
             .addInterceptor(logging)
             .build()
     }

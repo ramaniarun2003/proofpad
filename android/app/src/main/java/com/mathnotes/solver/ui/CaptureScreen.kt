@@ -118,6 +118,7 @@ fun CaptureScreen(
     pageMode: Boolean = false,
     setupVm: SetupViewModel? = null,
     onPageRecognized: () -> Unit = {},
+    onFormulaCaptured: ((File, CropSpec) -> Unit)? = null,
 ) {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
@@ -199,9 +200,12 @@ fun CaptureScreen(
                         widthFrac = gWidth, heightFrac = gHeight,
                         marginFrac = GUIDE_MARGIN,
                     )
-                    if (pageMode) {
+                    if (onFormulaCaptured != null) {
+                        // Single-line retake inside the wizard: hand the photo to the setup flow.
+                        onFormulaCaptured(f, crop)
+                    } else if (pageMode) {
                         // Recognition result drives navigation via SetupEvent; stay here on failure.
-                        setupVm?.capturePage(f, crop)
+                        setupVm?.capturePage(f)
                     } else {
                         val topicHint = TOPICS.firstOrNull { it.first == selectedTopic }?.second ?: "unknown"
                         // If the backend is down the photo is kept and retried once it connects.

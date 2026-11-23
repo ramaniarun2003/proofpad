@@ -363,6 +363,20 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> U
             OutlinedButton(onClick = { vm.clearHandwriting() }, modifier = Modifier.weight(1f), enabled = handwriting.isNotEmpty()) { Text("Clear samples") }
         }
 
+        var useCorrections by remember { mutableStateOf(vm.useCorrections) }
+        SettingToggle(
+            label = "Use my handwriting corrections",
+            help = "Apply the per-user correction map to Mathpix results before solving.",
+            checked = useCorrections,
+            onChange = { useCorrections = it; vm.useCorrections = it },
+        )
+        var rebuildMsg by remember { mutableStateOf<String?>(null) }
+        OutlinedButton(
+            onClick = { vm.rebuildCorrectionRules { rebuildMsg = it } },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = handwriting.isNotEmpty(),
+        ) { Text(rebuildMsg ?: "Rebuild rules") }
+
         Button(
             onClick = { if (vm.setBackendUrl(url)) onDone() else invalidUrl = true },
             modifier = Modifier.fillMaxWidth(),
@@ -377,6 +391,7 @@ private fun BackendStatusRow(status: BackendState, onAutoDetect: () -> Unit) {
         Column(Modifier.weight(1f)) {
             when (status) {
                 is BackendState.Searching -> Text("Looking for the backend…", style = MaterialTheme.typography.bodyMedium)
+                is BackendState.WakingUp -> Text("Waking up the server…", style = MaterialTheme.typography.bodyMedium)
                 is BackendState.Connected -> {
                     Text("Connected ✓  ${status.latencyMs}ms", style = MaterialTheme.typography.bodyLarge, color = NotepadColors.Green)
                     Text(status.url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -384,7 +399,7 @@ private fun BackendStatusRow(status: BackendState, onAutoDetect: () -> Unit) {
                 is BackendState.NotFound -> Text("Couldn’t reach the backend.", style = MaterialTheme.typography.bodyMedium, color = NotepadColors.Red)
             }
         }
-        if (status is BackendState.Searching) {
+        if (status is BackendState.Searching || status is BackendState.WakingUp) {
             CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
         } else {
             OutlinedButton(onClick = onAutoDetect) { Text("Auto-detect") }

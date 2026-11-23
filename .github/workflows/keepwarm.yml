@@ -1,0 +1,20 @@
+name: keep-warm
+
+# Ping /health so Render's free instance stays awake during class hours. The window below is
+# 13:00–04:59 UTC, which covers 8am–10pm US Central year-round (CST UTC-6 and CDT UTC-5).
+# Set the repo variable PROOFPAD_URL to your Render URL (Settings → Secrets and variables → Variables).
+on:
+  schedule:
+    - cron: "*/10 13-23,0-4 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake the instance
+        run: |
+          URL="${{ vars.PROOFPAD_URL || 'https://proofpad-backend.onrender.com' }}"
+          echo "pinging $URL/health"
+          # Allow up to 90s for a cold start; never fail the job (keep-warm is best-effort).
+          curl -fsS --max-time 90 "$URL/health" || echo "ping failed (instance may be cold-starting)"
