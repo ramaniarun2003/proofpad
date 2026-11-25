@@ -11,6 +11,7 @@ class Topic(str, Enum):
     derivative = "derivative"
     integral = "integral"
     series = "series"
+    limit = "limit"
     unknown = "unknown"
 
 

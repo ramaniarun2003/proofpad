@@ -14,6 +14,8 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -99,6 +101,7 @@ private val TOPICS = listOf(
     "Derivative" to "derivative",
     "Integral" to "integral",
     "Series" to "series",
+    "Limit" to "limit",
 )
 
 /**
@@ -335,8 +338,9 @@ fun CaptureScreen(
                 Modifier
                     .fillMaxWidth()
                     .offset(y = h * 0.77f)
+                    .horizontalScroll(rememberScrollState())   // 5 chips (incl. Limit) overflow a phone width
                     .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 TOPICS.forEach { (label, _) -> TopicChip(label, selected = selectedTopic == label) { selectedTopic = label } }
             }

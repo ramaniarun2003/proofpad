@@ -62,7 +62,7 @@ import com.mathnotes.solver.ui.theme.NotepadFonts
 private val LATEX_TOKENS = listOf("\\int", "\\iint", "\\iiint", "\\partial", "\\frac{}{}", "^{}", "\\sqrt{}", "\\sin", "\\ln", "\\sum")
 
 /** Topic chip label → the canonical topic value the backend expects. */
-private val TOPIC_OPTIONS = listOf("Integrate" to "integral", "Differentiate" to "derivative", "Series" to "series")
+private val TOPIC_OPTIONS = listOf("Integrate" to "integral", "Differentiate" to "derivative", "Series" to "series", "Limit" to "limit")
 
 /**
  * Step 2: the human in the loop, styled as a page of notepaper (mockup 02_review).

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from ...models import Topic
 from ..symbolic import Parsed
-from . import derivative, integral, series
+from . import derivative, integral, limit, series
 from .base import Solution, StepRec
 
 __all__ = ["solve", "Solution", "StepRec"]
@@ -22,6 +22,10 @@ def solve(p: Parsed, topic: Topic) -> tuple[Topic, Solution]:
         if p.index is None or p.limits is None:
             raise ValueError("series problems must be written as a \\sum with limits")
         return topic, series.generate(p.inner, p.index, p.limits)
+    if topic == Topic.limit:
+        if p.point is None:
+            raise ValueError("limit problems must be written as \\lim_{x \\to a} f(x)")
+        return topic, limit.generate(p.inner, p.var, p.point, p.direction)
     # Bare expression with no operator: default to differentiation, since that
     # is the most common thing written without an operator in notes.
     return Topic.derivative, derivative.generate(p.derivative_expression)

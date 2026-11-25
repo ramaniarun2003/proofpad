@@ -9,6 +9,9 @@ from __future__ import annotations
 import re
 
 _REPLACEMENTS: list[tuple[str, str]] = [
+    # Limit arrows first — before \right is stripped below (else \rightarrow → "arrow").
+    (r"\\longrightarrow|\\rightarrow", r"\\to"),
+    (r"\\operatorname\{lim\}", r"\\lim"),
     (r"\\left", ""),
     (r"\\right", ""),
     (r"\\,|\\;|\\:|\\!|\\quad|\\qquad|~", " "),
