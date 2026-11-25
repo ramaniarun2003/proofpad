@@ -4,24 +4,23 @@ import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import org.json.JSONArray
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import kotlin.math.abs
 
 /**
- * Debug harness for eyeballing [Preprocessor] on real notebook photos.
+ * CTC 1 proof: run the real [Preprocessor] on committed notebook photos and assert it crops to the
+ * guide box, not the full frame. OpenCV ships as an Android .aar (native .so only), so the pipeline
+ * can't run in a plain JVM unit test — this is instrumented and runs on a device/emulator.
  *
- * OpenCV ships here as an Android .aar (native libs are Android .so only), so the
- * pipeline cannot run in a plain JVM unit test — this is an instrumented test that
- * runs on a connected device/emulator with the real OpenCV + Android Bitmap/EXIF.
- *
- * Inputs are read from the test APK's assets under "samples" (files pushed into
- * the app's external dir via adb aren't reliably readable by the app itself), and
- * outputs are written to the app's external files dir, which pulls back cleanly.
- * scripts/preprocess_samples.sh wires all of this together: it stages the JPEGs
- * from app/src/test/resources/samples into the test APK assets, builds, installs,
- * runs this test, and pulls each "<name>_pre.jpg" back next to its input.
+ * Inputs live in the test APK assets under "samples": a few small JPEGs plus a `samples.json` listing
+ * each file's expected crop rect (normalized fractions). For each sample we crop with that rect and
+ * check the output's aspect ratio matches the crop, not the original frame — i.e. the guide-box crop
+ * actually happened. scripts/preprocess_samples.sh can stage more photos and pull the "_pre.jpg"
+ * outputs back for eyeballing.
  */
 @RunWith(AndroidJUnit4::class)
 class PreprocessorSampleTest {
@@ -35,38 +34,56 @@ class PreprocessorSampleTest {
         val testAssets = inst.context.assets          // test APK assets (the inputs)
         val ctx = inst.targetContext                  // app under test (OpenCV + filesDir)
 
-        val names = (testAssets.list("samples") ?: emptyArray())
-            .filter { it.substringAfterLast('.').lowercase() in setOf("jpg", "jpeg", "png") }
-            .filter { !it.substringBeforeLast('.').endsWith("_pre") }
-            .sorted()
-
+        val specs = JSONArray(testAssets.open("samples/samples.json").bufferedReader().use { it.readText() })
         assertTrue(
-            "No sample images packaged in the test APK — drop JPEGs in " +
-                "app/src/test/resources/samples/ and run scripts/preprocess_samples.sh.",
-            names.isNotEmpty(),
+            "No samples in samples.json — run scripts/preprocess_samples.sh to stage photos.",
+            specs.length() > 0,
         )
 
         val outDir = File(ctx.getExternalFilesDir(null), "samples").apply { mkdirs() }
         val oversized = mutableListOf<String>()
-        for (name in names) {
+        for (i in 0 until specs.length()) {
+            val spec = specs.getJSONObject(i)
+            val name = spec.getString("file")
             val input = File(ctx.cacheDir, name)
-            testAssets.open("samples/$name").use { i -> input.outputStream().use { o -> i.copyTo(o) } }
+            testAssets.open("samples/$name").use { s -> input.outputStream().use { o -> s.copyTo(o) } }
+
+            // Original (upright) dimensions.
+            val src = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(input.absolutePath, src)
+            val fullAspect = src.outWidth.toFloat() / src.outHeight
+
+            val l = spec.getDouble("leftFrac").toFloat()
+            val t = spec.getDouble("topFrac").toFloat()
+            val r = spec.getDouble("rightFrac").toFloat()
+            val b = spec.getDouble("bottomFrac").toFloat()
+            val crop = CropSpec.NormalizedRect(l, t, r, b, spec.optDouble("marginFrac", 0.0).toFloat())
+            val cropAspect = ((r - l) * src.outWidth) / ((b - t) * src.outHeight)
 
             val t0 = System.currentTimeMillis()
-            val result = Preprocessor.process(ctx, input)
+            val result = Preprocessor.process(ctx, input, crop)
             val ms = System.currentTimeMillis() - t0
 
             val dest = File(outDir, input.nameWithoutExtension + "_pre.jpg")
             result.copyTo(dest, overwrite = true)
 
-            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(dest.absolutePath, opts)
+            val out = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(dest.absolutePath, out)
+            val outAspect = out.outWidth.toFloat() / out.outHeight
             val kb = dest.length() / 1024
-            Log.i(tag, "$name -> ${dest.name}: ${opts.outWidth}x${opts.outHeight}, ${kb} KB, ${ms} ms")
+            Log.i(tag, "$name ${src.outWidth}x${src.outHeight} -> ${out.outWidth}x${out.outHeight} " +
+                "(${kb} KB, ${ms} ms) cropAspect=$cropAspect fullAspect=$fullAspect outAspect=$outAspect")
+
+            // The guide-box crop changed the aspect ratio: the output must look like the crop, not the frame.
+            assertTrue(
+                "$name: output aspect $outAspect is closer to the full frame ($fullAspect) than the " +
+                    "guide-box crop ($cropAspect) — the crop was not applied",
+                abs(outAspect - cropAspect) < abs(outAspect - fullAspect),
+            )
             if (dest.length() > maxBytes) oversized += "${dest.name} (${kb} KB)"
         }
 
-        Log.i(tag, "Processed ${names.size} sample(s) -> ${outDir.absolutePath}")
+        Log.i(tag, "Processed ${specs.length()} sample(s) -> ${outDir.absolutePath}")
         assertTrue("Output(s) exceed ~500 KB budget: $oversized", oversized.isEmpty())
     }
 }
