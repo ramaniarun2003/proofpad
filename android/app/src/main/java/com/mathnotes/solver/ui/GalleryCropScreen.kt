@@ -6,17 +6,15 @@ import android.graphics.Matrix
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,14 +25,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.exifinterface.media.ExifInterface
 import com.mathnotes.solver.image.CropSpec
+import com.mathnotes.solver.ui.components.NotepadPage
+import com.mathnotes.solver.ui.theme.NotepadColors
+import com.mathnotes.solver.ui.theme.NotepadFonts
 
 /**
  * Minimal adjustable crop for gallery photos: picked images have no framing guide,
@@ -58,9 +60,36 @@ fun GalleryCropScreen(vm: SolverViewModel, onCropped: () -> Unit, onCancel: () -
     var right by remember { mutableStateOf(0.9f) }
     var bottom by remember { mutableStateOf(0.7f) }
 
-    Column(Modifier.fillMaxSize().systemBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Crop to the expression", style = MaterialTheme.typography.headlineSmall)
-        Text("Drag the corners to frame one expression.", style = MaterialTheme.typography.bodyMedium)
+    NotepadPage(
+        title = "Crop",
+        caption = "one expression",
+        scrollable = false,
+        bottomBar = {
+            OutlinedButton(
+                onClick = onCancel,
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+            ) { Text("Cancel", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
+            Button(
+                onClick = {
+                    vm.captureAndRecognize(
+                        file,
+                        CropSpec.NormalizedRect(left, top, right, bottom, marginFrac = 0.05f),
+                    )
+                    onCropped()
+                },
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),
+            ) { Text("Use crop", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
+        },
+    ) {
+        Text(
+            "Drag the corners to frame one expression.",
+            fontFamily = NotepadFonts.Inter, fontSize = 13.sp, color = NotepadColors.Muted,
+            modifier = Modifier.padding(bottom = 12.dp),
+        )
 
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val density = LocalDensity.current
@@ -119,29 +148,16 @@ fun GalleryCropScreen(vm: SolverViewModel, onCropped: () -> Unit, onCancel: () -
                     val tl = toPx(left, top)
                     val br = toPx(right, bottom)
                     drawRect(
-                        color = Color(0xFF2A78D6),
+                        color = NotepadColors.Red,
                         topLeft = tl,
                         size = Size(br.x - tl.x, br.y - tl.y),
                         style = Stroke(width = 5f),
                     )
-                    listOf(tl, br).forEach { drawCircle(Color(0xFF2A78D6), radius = handleR, center = it) }
+                    listOf(tl, br).forEach { drawCircle(NotepadColors.Red, radius = handleR, center = it) }
                 }
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Cancel") }
-            Button(
-                onClick = {
-                    vm.captureAndRecognize(
-                        file,
-                        CropSpec.NormalizedRect(left, top, right, bottom, marginFrac = 0.05f),
-                    )
-                    onCropped()
-                },
-                modifier = Modifier.weight(1f),
-            ) { Text("Use crop") }
-        }
     }
 }
 

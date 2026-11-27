@@ -15,19 +15,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,6 +61,7 @@ import com.mathnotes.solver.ui.components.CheckIcon
 import com.mathnotes.solver.ui.components.CrossIcon
 import com.mathnotes.solver.ui.components.NotepadBottomBar
 import com.mathnotes.solver.ui.components.NotepadHeader
+import com.mathnotes.solver.ui.components.NotepadPage
 import com.mathnotes.solver.ui.components.StickyNote
 import com.mathnotes.solver.ui.components.ruledPaper
 import com.mathnotes.solver.ui.theme.NotepadColors
@@ -300,7 +301,16 @@ internal fun DrawScope.drawCamera(color: Color) {
     drawCircle(color, radius = s * 0.15f, center = Offset(s * 0.5f, s * 0.54f), style = Stroke(width = 2.dp.toPx()))
 }
 
-/** Where the backend lives on today's LAN. */
+// Notepad text styles for the Settings page, so nothing here reaches for MaterialTheme.
+@Composable
+private fun SectionHeader(text: String) =
+    Text(text, fontFamily = NotepadFonts.PatrickHand, fontSize = 22.sp, color = NotepadColors.Ink)
+
+@Composable
+private fun BodyText(text: String, color: androidx.compose.ui.graphics.Color = NotepadColors.Muted) =
+    Text(text, fontFamily = NotepadFonts.Inter, fontSize = 13.sp, color = color)
+
+/** Where the backend lives on today's LAN. On the notepad page, like the rest of the app. */
 @Composable
 fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> Unit = {}) {
     var url by remember { mutableStateOf(vm.savedBackendUrl) }
@@ -313,74 +323,92 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> U
     // Mirror an auto-discovered URL into the field until the user starts editing it.
     LaunchedEffect(backend) { (backend as? BackendState.Connected)?.let { if (!edited) url = it.url } }
 
-    Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Backend", style = MaterialTheme.typography.headlineSmall)
-        BackendStatusRow(backend, onAutoDetect = vm::searchBackend)
-        Text("Enter the backend URL, such as http://192.168.1.42:8000/.")
-        OutlinedTextField(
-            value = url,
-            onValueChange = { url = it; invalidUrl = false; edited = true },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            isError = invalidUrl,
-            supportingText = if (invalidUrl) ({ Text("Enter a valid HTTP or HTTPS URL.") }) else null,
-        )
+    NotepadPage(
+        title = "Settings",
+        caption = null,
+        bottomBar = {
+            Button(
+                onClick = { if (vm.setBackendUrl(url)) onDone() else invalidUrl = true },
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),
+            ) { Text("Save", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
+        },
+    ) {
+        Column(Modifier.padding(end = 4.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SectionHeader("Backend")
+            BackendStatusRow(backend, onAutoDetect = vm::searchBackend)
+            BodyText("Enter the backend URL, such as http://192.168.1.42:8000/.")
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it; invalidUrl = false; edited = true },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                isError = invalidUrl,
+                textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = NotepadColors.Ink),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = NotepadColors.Ink,
+                    unfocusedBorderColor = NotepadColors.ChipBorder,
+                    cursorColor = NotepadColors.Ink,
+                ),
+                supportingText = if (invalidUrl) ({ Text("Enter a valid HTTP or HTTPS URL.", fontFamily = NotepadFonts.Inter, color = NotepadColors.Red) }) else null,
+            )
 
-        Text("Debug", style = MaterialTheme.typography.titleMedium)
-        SettingToggle(
-            label = "Save preprocessing stages",
-            help = "Write each stage (raw/crop/gray/flat/final) to filesDir/debug.",
-            checked = debugImages,
-            onChange = { debugImages = it; vm.debugImages = it },
-        )
-        SettingToggle(
-            label = "Use adaptive threshold",
-            help = "Binarize instead of the gentle grayscale pipeline — for A/B comparison.",
-            checked = adaptiveThreshold,
-            onChange = { adaptiveThreshold = it; vm.useAdaptiveThreshold = it },
-        )
+            SectionHeader("Debug")
+            SettingToggle(
+                label = "Save preprocessing stages",
+                help = "Write each stage (raw/crop/gray/flat/final) to filesDir/debug.",
+                checked = debugImages,
+                onChange = { debugImages = it; vm.debugImages = it },
+            )
+            SettingToggle(
+                label = "Use adaptive threshold",
+                help = "Binarize instead of the gentle grayscale pipeline — for A/B comparison.",
+                checked = adaptiveThreshold,
+                onChange = { adaptiveThreshold = it; vm.useAdaptiveThreshold = it },
+            )
 
-        Text("Onboarding", style = MaterialTheme.typography.titleMedium)
-        var welcomeReset by remember { mutableStateOf(false) }
-        OutlinedButton(
-            onClick = { vm.resetWelcome(); welcomeReset = true },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(if (welcomeReset) "Welcome screen will show next launch ✓" else "Show welcome screen again") }
+            SectionHeader("Onboarding")
+            var welcomeReset by remember { mutableStateOf(false) }
+            OutlinedButton(
+                onClick = { vm.resetWelcome(); welcomeReset = true },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+            ) { Text(if (welcomeReset) "Welcome screen will show next launch ✓" else "Show welcome screen again", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
 
-        Text("Handwriting samples", style = MaterialTheme.typography.titleMedium)
-        val latest = handwriting.maxByOrNull { it.createdAt }
-        Text(
-            if (latest == null) "No samples saved yet."
-            else "${handwriting.size} samples · saved ${
-                Instant.ofEpochMilli(latest.createdAt).atZone(ZoneId.systemDefault())
-                    .format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))
-            }",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onRedoSetup, modifier = Modifier.weight(1f)) { Text("Redo setup") }
-            OutlinedButton(onClick = { vm.clearHandwriting() }, modifier = Modifier.weight(1f), enabled = handwriting.isNotEmpty()) { Text("Clear samples") }
+            SectionHeader("Handwriting samples")
+            val latest = handwriting.maxByOrNull { it.createdAt }
+            BodyText(
+                if (latest == null) "No samples saved yet."
+                else "${handwriting.size} samples · saved ${
+                    Instant.ofEpochMilli(latest.createdAt).atZone(ZoneId.systemDefault())
+                        .format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))
+                }",
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick = onRedoSetup, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink)) {
+                    Text("Redo setup", fontFamily = NotepadFonts.Inter, fontSize = 14.sp)
+                }
+                OutlinedButton(onClick = { vm.clearHandwriting() }, modifier = Modifier.weight(1f), enabled = handwriting.isNotEmpty(), colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink)) {
+                    Text("Clear samples", fontFamily = NotepadFonts.Inter, fontSize = 14.sp)
+                }
+            }
+
+            var useCorrections by remember { mutableStateOf(vm.useCorrections) }
+            SettingToggle(
+                label = "Use my handwriting corrections",
+                help = "Apply the per-user correction map to Mathpix results before solving.",
+                checked = useCorrections,
+                onChange = { useCorrections = it; vm.useCorrections = it },
+            )
+            var rebuildMsg by remember { mutableStateOf<String?>(null) }
+            OutlinedButton(
+                onClick = { vm.rebuildCorrectionRules { rebuildMsg = it } },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = handwriting.isNotEmpty(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+            ) { Text(rebuildMsg ?: "Rebuild rules", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
         }
-
-        var useCorrections by remember { mutableStateOf(vm.useCorrections) }
-        SettingToggle(
-            label = "Use my handwriting corrections",
-            help = "Apply the per-user correction map to Mathpix results before solving.",
-            checked = useCorrections,
-            onChange = { useCorrections = it; vm.useCorrections = it },
-        )
-        var rebuildMsg by remember { mutableStateOf<String?>(null) }
-        OutlinedButton(
-            onClick = { vm.rebuildCorrectionRules { rebuildMsg = it } },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = handwriting.isNotEmpty(),
-        ) { Text(rebuildMsg ?: "Rebuild rules") }
-
-        Button(
-            onClick = { if (vm.setBackendUrl(url)) onDone() else invalidUrl = true },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Save") }
     }
 }
 
@@ -390,18 +418,20 @@ private fun BackendStatusRow(status: BackendState, onAutoDetect: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(Modifier.weight(1f)) {
             when (status) {
-                is BackendState.Searching -> Text("Checking the backend URL…", style = MaterialTheme.typography.bodyMedium)
+                is BackendState.Searching -> BodyText("Checking the backend URL…")
                 is BackendState.Connected -> {
-                    Text("Connected ✓  ${status.latencyMs}ms", style = MaterialTheme.typography.bodyLarge, color = NotepadColors.Green)
-                    Text(status.url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Connected ✓  ${status.latencyMs}ms", fontFamily = NotepadFonts.Inter, fontSize = 15.sp, color = NotepadColors.Green)
+                    Text(status.url, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = NotepadColors.Muted)
                 }
-                is BackendState.NotFound -> Text("Couldn’t reach the backend.", style = MaterialTheme.typography.bodyMedium, color = NotepadColors.Red)
+                is BackendState.NotFound -> BodyText("Couldn’t reach the backend.", color = NotepadColors.Red)
             }
         }
         if (status is BackendState.Searching) {
-            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = NotepadColors.Ink)
         } else {
-            OutlinedButton(onClick = onAutoDetect) { Text("Test") }
+            OutlinedButton(onClick = onAutoDetect, colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink)) {
+                Text("Test", fontFamily = NotepadFonts.Inter, fontSize = 14.sp)
+            }
         }
     }
 }
@@ -409,10 +439,21 @@ private fun BackendStatusRow(status: BackendState, onAutoDetect: () -> Unit) {
 @Composable
 private fun SettingToggle(label: String, help: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(label, fontFamily = NotepadFonts.Inter, fontSize = 15.sp, color = NotepadColors.Ink)
+            BodyText(help)
         }
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = NotepadColors.Paper,
+                checkedTrackColor = NotepadColors.Ink,
+                checkedBorderColor = NotepadColors.Ink,
+                uncheckedThumbColor = NotepadColors.ChipBorder,
+                uncheckedTrackColor = NotepadColors.Paper,
+                uncheckedBorderColor = NotepadColors.ChipBorder,
+            ),
+        )
     }
 }

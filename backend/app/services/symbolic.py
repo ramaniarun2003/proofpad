@@ -28,6 +28,8 @@ class Parsed:
     limits: tuple | None = None   # (lower, upper) for definite integrals / sums
     index: sp.Symbol | None = None  # summation index for series
     is_partial_derivative: bool = False
+    point: sp.Basic | None = None   # the approached value a, for limits
+    direction: str = "+-"            # "+", "-", or "+-" for limits
 
     @property
     def derivative_expression(self) -> sp.Expr:
@@ -106,6 +108,10 @@ def parse(latex: str, variable: str = "x") -> Parsed:
         lim = expr.limits[0]
         return Parsed(expr=expr, inner=expr.function, topic=Topic.series, var=var,
                       limits=(lim[1], lim[2]), index=lim[0])
+    if isinstance(expr, sp.Limit):
+        func, v, point, direction = expr.args
+        return Parsed(expr=expr, inner=func, topic=Topic.limit, var=v,
+                      point=point, direction=str(direction))
     if has_partial:
         if isinstance(expr, sp.Expr) and expr.has(sp.Derivative):
             return Parsed(expr=expr, inner=expr, topic=Topic.derivative, var=var,

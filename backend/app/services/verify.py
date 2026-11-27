@@ -62,6 +62,57 @@ def equivalent(a: sp.Basic, b: sp.Basic, antiderivative_vars: tuple[sp.Symbol, .
     return tried > 0
 
 
+def _limit_truth(p: Parsed):
+    """Independent limit via sympy.limit; 'does not exist' when the sides disagree."""
+    inner, var, point, direction = p.inner, p.var, p.point, p.direction
+    try:
+        if direction == "+-":
+            left = sp.limit(inner, var, point, "-")
+            right = sp.limit(inner, var, point, "+")
+            if left != right:
+                return "does not exist"
+        val = sp.limit(inner, var, point, direction)
+    except Exception:
+        return "does not exist"
+    return "does not exist" if val == sp.zoo else val
+
+
+def _values_equal(a, b) -> bool:
+    if a == b:
+        return True
+    if a in (sp.oo, -sp.oo, sp.zoo) or b in (sp.oo, -sp.oo, sp.zoo):
+        return a == b
+    try:
+        return sp.simplify(a - b) == 0
+    except Exception:
+        return False
+
+
+def _lhopital_numeric_ok(after, var, point, truth) -> bool:
+    """Sample the derivative-quotient near the point and check it approaches truth."""
+    inner = after.args[0] if isinstance(after, sp.Limit) else after
+    if point == sp.oo:
+        pts = [sp.Integer(10) ** k for k in (1, 2, 3)]
+    elif point == -sp.oo:
+        pts = [-sp.Integer(10) ** k for k in (1, 2, 3)]
+    else:
+        pts = [point + sp.Rational(1, 10 ** k) for k in (1, 2, 3)]
+    last = None
+    for pt in pts:
+        try:
+            last = complex(inner.subs(var, pt).evalf())
+        except Exception:
+            return True  # cannot sample here — don't fail the step on that basis
+    if last is None:
+        return True
+    if truth in (sp.oo, -sp.oo):
+        return abs(last) > 1.0
+    try:
+        return abs(last - complex(sp.N(truth))) < 1e-2
+    except Exception:
+        return True
+
+
 def _truth(p: Parsed, topic: Topic):
     if topic == Topic.derivative:
         return p.derivative_expression.doit()
@@ -76,6 +127,8 @@ def _truth(p: Parsed, topic: Topic):
         except Exception:
             c = None
         return "converges" if c is True else "diverges" if c is False else "inconclusive"
+    if topic == Topic.limit:
+        return _limit_truth(p)
     raise ValueError(f"cannot verify topic {topic}")
 
 
@@ -91,6 +144,21 @@ def verify(p: Parsed, topic: Topic, sol: Solution) -> VerifyResult:
                 return VerifyResult(False, i, [f"step {i}: {st.rule} says {st.verdict}, SymPy says {truth}"])
         ok = sol.verdict == truth
         return VerifyResult(ok, None if ok else len(sol.steps) - 1, [f"SymPy: {truth}"])
+
+    if topic == Topic.limit:
+        if truth == "does not exist":
+            ok = sol.verdict == "does not exist"
+            return VerifyResult(ok, None if ok else max(len(sol.steps) - 1, 0),
+                                ["independent limit (sympy.limit): does not exist"])
+        for i, st in enumerate(sol.steps):
+            after_val = st.after.doit() if isinstance(st.after, sp.Limit) else st.after
+            if not _values_equal(after_val, truth):
+                return VerifyResult(False, i, [f"step {i} ({st.rule}) does not match the limit {sp.latex(truth)}"])
+            if "hopital" in st.rule.lower() and not _lhopital_numeric_ok(st.after, p.var, p.point, truth):
+                return VerifyResult(False, i, [f"step {i}: L'Hopital quotient does not approach {sp.latex(truth)} numerically"])
+        if sol.answer is not None and not _values_equal(sol.answer, truth):
+            return VerifyResult(False, len(sol.steps) - 1, ["final limit differs from the direct result"])
+        return VerifyResult(True, None, [f"independent limit (sympy.limit): {sp.latex(truth)}"])
 
     iterated = p.iterated_integral if topic == Topic.integral else None
     final_vars = ()

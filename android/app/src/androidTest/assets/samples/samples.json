@@ -1,0 +1,5 @@
+[
+  { "file": "sample1_page.jpg",    "leftFrac": 0.05, "topFrac": 0.05, "rightFrac": 0.95, "bottomFrac": 0.20, "marginFrac": 0.0 },
+  { "file": "sample2_capture.jpg", "leftFrac": 0.10, "topFrac": 0.30, "rightFrac": 0.90, "bottomFrac": 0.70, "marginFrac": 0.0 },
+  { "file": "sample3_capture.jpg", "leftFrac": 0.05, "topFrac": 0.40, "rightFrac": 0.95, "bottomFrac": 0.60, "marginFrac": 0.0 }
+]

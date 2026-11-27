@@ -3,11 +3,13 @@ package com.mathnotes.solver.ui
 import android.graphics.Color
 import android.widget.ImageView
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.mathnotes.solver.ui.theme.NotepadColors
 import ru.noties.jlatexmath.JLatexMathDrawable
 
 /**
@@ -27,7 +29,7 @@ fun LatexView(latex: String, modifier: Modifier = Modifier, textSizePx: Float = 
     }.getOrNull()
 
     if (drawable == null) {
-        Text(latex, style = MaterialTheme.typography.bodyMedium, modifier = modifier)
+        Text(latex, fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = NotepadColors.Ink, modifier = modifier)
         return
     }
     AndroidView(

@@ -1,4 +1,9 @@
-# Auto-populated by scripts/preprocess_samples.sh from
-# app/src/test/resources/samples/. Keep the staged photos out of git.
+# The curated samples (sample*_*.jpg + samples.json) are committed so the CTC-1
+# instrumented crop test (PreprocessorSampleTest) runs deterministically on CI/any
+# checkout. Ad-hoc photos staged by scripts/preprocess_samples.sh stay out of git.
 *
 !.gitignore
+!samples.json
+!sample1_page.jpg
+!sample2_capture.jpg
+!sample3_capture.jpg
