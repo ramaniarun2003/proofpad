@@ -1,6 +1,7 @@
 """FastAPI entry point.  Run:  uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"""
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -11,6 +12,16 @@ from .db import init_db
 from .models import HealthResponse
 from .routers import export, recognize, solve
 from .services import discovery, recognition
+
+
+# uvicorn only configures its own loggers; give ours a handler so INFO lines reach the console.
+_log = logging.getLogger("proofpad")
+if not _log.handlers:
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("INFO:     %(name)s: %(message)s"))
+    _log.addHandler(_h)
+    _log.setLevel(logging.INFO)
+    _log.propagate = False
 
 
 @asynccontextmanager

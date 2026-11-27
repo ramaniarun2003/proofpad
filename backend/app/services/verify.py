@@ -205,6 +205,21 @@ def verify_latex_steps(p: Parsed, topic: Topic,
         except Exception as exc:
             return VerifyResult(False, index, [f"could not parse step {index}: {exc}"])
 
+    if topic == Topic.limit:
+        # A student's limit chain: every step must still have the limit's value, whether it is
+        # a rewritten \\lim expression or the number itself.
+        truth = _limit_truth(p)
+        if truth == "does not exist":
+            return VerifyResult(False, 0, ["independent limit (sympy.limit): does not exist"])
+        for i, (rule, _before, after) in enumerate(step_latex):
+            parsed_after = parse_step(after, i)
+            if isinstance(parsed_after, VerifyResult):
+                return parsed_after
+            value = parsed_after.doit() if isinstance(parsed_after, sp.Limit) else parsed_after
+            if not _values_equal(value, truth):
+                return VerifyResult(False, i, [f"step {i} ({rule}) does not match the limit {sp.latex(truth)}"])
+        return VerifyResult(True, None, [f"independent limit (sympy.limit): {sp.latex(truth)}"])
+
     recs: list[StepRec] = []
     modulo_c = topic == Topic.integral and p.limits is None
     expected_before = p.expr

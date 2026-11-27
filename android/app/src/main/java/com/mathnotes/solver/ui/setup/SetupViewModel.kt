@@ -106,6 +106,11 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
                 Timber.i("setup page recognize: %d lines, image %dx%d", resp.lines.size, resp.imageW, resp.imageH)
                 if (resp.lines.size < 3) {
                     _state.update { it.copy(busy = false, status = "") }
+                    // The app does no line splitting of its own: this count is the backend's.
+                    Timber.w(
+                        "setup page: showing \"could only find %d lines\" — backend returned lines=%d (raw_text=%s)",
+                        resp.lines.size, resp.lines.size, resp.rawText.take(120),
+                    )
                     _events.emit(SetupEvent.Error("I could only find ${resp.lines.size} lines, try again with the page flat"))
                     return@launch
                 }

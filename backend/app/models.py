@@ -15,12 +15,24 @@ class Topic(str, Enum):
     unknown = "unknown"
 
 
+class Segment(BaseModel):
+    """One piece of the capture after the Identify split (a line, cut at its top-level `=`)."""
+    latex: str
+    line: int
+    bbox: Optional[list[int]] = None  # the source line's [x0, y0, x1, y1], when Mathpix gave one
+
+
 class RecognizeResponse(BaseModel):
     session_id: str
-    latex: str
+    latex: str                       # the full recognized string (problem and working together)
     confidence: float = Field(ge=0.0, le=1.0)
     topic_guess: Topic
     low_confidence: bool
+    # Identify split (services/identify.py): the problem, then the student's own steps in order.
+    problem_latex: str = ""
+    steps: list[str] = []
+    segments: list[Segment] = []
+    split_uncertain: bool = False    # "=" present but no operator found: the app should ask
 
 
 class PageLine(BaseModel):
@@ -36,6 +48,10 @@ class PageRecognizeResponse(BaseModel):
     raw_text: str
     image_w: int
     image_h: int
+    problem_latex: str = ""
+    steps: list[str] = []
+    segments: list[Segment] = []
+    split_uncertain: bool = False
 
 
 class Step(BaseModel):

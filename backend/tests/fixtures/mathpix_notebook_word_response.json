@@ -1,0 +1,190 @@
+{
+  "request_id": "827dde75-ccca-46af-a0bc-a5733f041b8d",
+  "version": "SuperNet-202",
+  "is_printed": true,
+  "is_handwritten": false,
+  "auto_rotate_confidence": 1.6308383976593177e-08,
+  "auto_rotate_degrees": 0,
+  "image_height": 2000,
+  "image_width": 1506,
+  "page_confidence": {
+    "confidence": null,
+    "text_confidence": 0.32877224252843007,
+    "layout_confidence": null,
+    "method": "prototype_min_v1"
+  },
+  "word_data": [
+    {
+      "type": "math",
+      "cnt": [
+        [
+          494,
+          325
+        ],
+        [
+          822,
+          325
+        ],
+        [
+          822,
+          467
+        ],
+        [
+          494,
+          467
+        ]
+      ],
+      "text": "$\\int x^{2} d x$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "\\int x^{2} d x"
+    },
+    {
+      "type": "header",
+      "cnt": [
+        [
+          296,
+          468
+        ],
+        [
+          366,
+          468
+        ],
+        [
+          366,
+          546
+        ],
+        [
+          296,
+          546
+        ]
+      ],
+      "text": "D",
+      "confidence": 0.7137079184915365,
+      "confidence_rate": 0.9453372095086805
+    },
+    {
+      "type": "header",
+      "cnt": [
+        [
+          306,
+          645
+        ],
+        [
+          348,
+          645
+        ],
+        [
+          348,
+          679
+        ],
+        [
+          306,
+          679
+        ]
+      ],
+      "text": "\u2190",
+      "confidence": 0.38767576217651367,
+      "confidence_rate": 0.8539087062944831
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          437,
+          891
+        ],
+        [
+          444,
+          560
+        ],
+        [
+          981,
+          571
+        ],
+        [
+          974,
+          902
+        ]
+      ],
+      "text": "$\\frac{d}{d x} \\sin (3 x)$\n$\\frac{e^{x}}{x+1}$",
+      "confidence": 0.9239549115300179,
+      "confidence_rate": 0.9982439435506555,
+      "latex": "\\begin{array}{c}\n\\frac{d}{d x} \\sin (3 x) \\\\\n\\frac{e^{x}}{x+1}\n\\end{array}"
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          409,
+          1046
+        ],
+        [
+          427,
+          845
+        ],
+        [
+          813,
+          880
+        ],
+        [
+          795,
+          1081
+        ]
+      ],
+      "text": "$\\sum \\frac{1}{n^{2}}$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "\\sum \\frac{1}{n^{2}}"
+    },
+    {
+      "type": "header",
+      "cnt": [
+        [
+          324,
+          1122
+        ],
+        [
+          338,
+          1122
+        ],
+        [
+          338,
+          1132
+        ],
+        [
+          324,
+          1132
+        ]
+      ],
+      "text": "\\}",
+      "confidence": 0.32877224252843007,
+      "confidence_rate": 0.8307732877147412
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          432,
+          1212
+        ],
+        [
+          430,
+          1031
+        ],
+        [
+          1108,
+          1024
+        ],
+        [
+          1110,
+          1205
+        ]
+      ],
+      "text": "$\\lim _{x \\rightarrow 0} \\ln (1+x)$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "\\lim _{x \\rightarrow 0} \\ln (1+x)"
+    }
+  ]
+}

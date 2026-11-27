@@ -16,6 +16,8 @@ _REPLACEMENTS: list[tuple[str, str]] = [
     (r"\\right", ""),
     (r"\\,|\\;|\\:|\\!|\\quad|\\qquad|~", " "),
     (r"\\dfrac|\\tfrac", r"\\frac"),
+    # "d/dx" written with a slash (Mathpix: `d / d x \\sin (3 x)`) → the \\frac form the parser reads.
+    (r"(?<![a-zA-Z\\\\])d\s*/\s*d\s*([a-zA-Z])(?![a-zA-Z])", r"\\frac{d}{d\1} "),
     (r"\\displaystyle", ""),
     (r"\\mathrm\{d\}", "d"),
     (r"\\operatorname\{d\}", "d"),
