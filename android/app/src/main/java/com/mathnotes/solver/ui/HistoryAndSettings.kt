@@ -25,6 +25,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.material3.Text
@@ -438,10 +439,21 @@ private fun BackendStatusRow(status: BackendState, onAutoDetect: () -> Unit) {
 @Composable
 private fun SettingToggle(label: String, help: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
             Text(label, fontFamily = NotepadFonts.Inter, fontSize = 15.sp, color = NotepadColors.Ink)
             BodyText(help)
         }
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = NotepadColors.Paper,
+                checkedTrackColor = NotepadColors.Ink,
+                checkedBorderColor = NotepadColors.Ink,
+                uncheckedThumbColor = NotepadColors.ChipBorder,
+                uncheckedTrackColor = NotepadColors.Paper,
+                uncheckedBorderColor = NotepadColors.ChipBorder,
+            ),
+        )
     }
 }
