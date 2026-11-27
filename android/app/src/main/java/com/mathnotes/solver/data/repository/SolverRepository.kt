@@ -2,6 +2,7 @@ package com.mathnotes.solver.data.repository
 
 import android.content.Context
 import android.provider.Settings
+import com.mathnotes.solver.data.api.BackendLocator
 import com.mathnotes.solver.data.api.ApiClient
 import com.mathnotes.solver.data.api.PageRecognizeResponse
 import com.mathnotes.solver.data.api.RecognizeResponse
@@ -79,11 +80,24 @@ class SolverRepository(context: Context) {
         val part = MultipartBody.Part.createFormData(
             "image", imageFile.name, imageFile.asRequestBody("image/jpeg".toMediaType())
         )
-        api.recognizePage(
+        val mode = "page"
+        val url = "${BackendLocator.peek()?.currentBaseUrl ?: "<no backend>/"}recognize"
+        Timber.i(
+            "page recognize request: POST %s | form: mode=%s device_id=%s image=%s (%d bytes, image/jpeg)",
+            url, mode, deviceId, imageFile.name, imageFile.length(),
+        )
+        val resp = api.recognizePage(
             part,
             deviceId.toRequestBody("text/plain".toMediaType()),
-            "page".toRequestBody("text/plain".toMediaType()),
+            mode.toRequestBody("text/plain".toMediaType()),
         )
+        // The line count exactly as the backend returned it, before any app-side handling.
+        Timber.i(
+            "page recognize response: lines=%d image=%dx%d session=%s | %s",
+            resp.lines.size, resp.imageW, resp.imageH, resp.sessionId,
+            resp.lines.joinToString(" | ") { it.latex.take(40) },
+        )
+        resp
     }
 
     /**
