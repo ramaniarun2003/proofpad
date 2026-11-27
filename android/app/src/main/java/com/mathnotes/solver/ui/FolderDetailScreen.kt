@@ -246,7 +246,7 @@ private fun NoteCard(note: SessionEntity, stepCountOf: (SessionEntity) -> Int, t
                 fontFamily = NotepadFonts.PatrickHand, fontSize = 13.sp, color = NotepadColors.Muted,
             )
         }
-        CardStamp(flagged, note.mismatchAt, Modifier.align(Alignment.TopEnd).padding(8.dp))
+        CardStamp(flagged, note.mismatchAt, Modifier.align(Alignment.TopEnd).padding(8.dp))  // mismatchAt == null → "ALMOST"
     }
 }
 
@@ -266,8 +266,10 @@ private fun AddCard(folderName: String, onClick: () -> Unit, modifier: Modifier)
 
 @Composable
 private fun CardStamp(flagged: Boolean, mismatchAt: Int?, modifier: Modifier) {
-    val color = if (flagged) NotepadColors.Red else NotepadColors.Green
-    val text = if (flagged) "STEP ${(mismatchAt ?: 0) + 1}" else "OK"
+    // A student chain that is right but unfinished is stored as verified = false with no flagged step.
+    val almost = flagged && mismatchAt == null
+    val color = if (almost) NotepadColors.DifficultyMedium else if (flagged) NotepadColors.Red else NotepadColors.Green
+    val text = if (almost) "ALMOST" else if (flagged) "STEP ${mismatchAt!! + 1}" else "OK"
     Box(
         modifier.graphicsLayer { rotationZ = 10f }.border(2.dp, color, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp),
     ) { Text(text, fontFamily = NotepadFonts.PatrickHand, fontSize = 11.sp, color = color, letterSpacing = 1.sp) }

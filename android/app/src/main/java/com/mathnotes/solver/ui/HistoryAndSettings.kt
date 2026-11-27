@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.mathnotes.solver.data.api.BackendState
 import com.mathnotes.solver.data.db.Difficulty
+import com.mathnotes.solver.data.api.Verdict
 import com.mathnotes.solver.data.db.SessionEntity
 import com.mathnotes.solver.ui.components.CheckIcon
 import com.mathnotes.solver.ui.components.CrossIcon
@@ -178,10 +179,12 @@ private fun HistoryItem(s: SessionEntity, index: Int, stepCountOf: (SessionEntit
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-            when (s.verified) {
-                true -> CheckIcon(NotepadColors.Green, 24.dp)
-                false -> CrossIcon(NotepadColors.Red, 24.dp)
-                null -> Text("·", fontFamily = NotepadFonts.PatrickHand, fontSize = 22.sp, color = NotepadColors.Muted)
+            when {
+                s.verified == true -> CheckIcon(NotepadColors.Green, 24.dp)
+                Verdict.of(s.verified, s.mismatchAt) == Verdict.INCOMPLETE ->
+                    Text("…", fontFamily = NotepadFonts.PatrickHand, fontSize = 22.sp, color = NotepadColors.DifficultyMedium)
+                s.verified == false -> CrossIcon(NotepadColors.Red, 24.dp)
+                else -> Text("·", fontFamily = NotepadFonts.PatrickHand, fontSize = 22.sp, color = NotepadColors.Muted)
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -190,7 +193,7 @@ private fun HistoryItem(s: SessionEntity, index: Int, stepCountOf: (SessionEntit
                 Text(
                     metaLine(s, stepCountOf),
                     fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp,
-                    color = if (s.verified == false) NotepadColors.Red else NotepadColors.Muted,
+                    color = if (Verdict.of(s.verified, s.mismatchAt) == Verdict.MISMATCH) NotepadColors.Red else NotepadColors.Muted,
                 )
                 s.difficulty?.let { d ->
                     val stars = d.ordinal + 1
@@ -278,10 +281,11 @@ private fun mathLine(s: SessionEntity): String {
 }
 
 private fun metaLine(s: SessionEntity, stepCountOf: (SessionEntity) -> Int): String {
-    val status = when (s.verified) {
-        true -> "verified"
-        false -> "step ${(s.mismatchAt ?: 0) + 1} flagged"
-        null -> "not solved"
+    val status = when (Verdict.of(s.verified, s.mismatchAt)) {
+        Verdict.VERIFIED -> "verified"
+        Verdict.INCOMPLETE -> "almost, not finished"
+        Verdict.MISMATCH -> "step ${(s.mismatchAt ?: 0) + 1} flagged"
+        else -> "not solved"
     }
     val parts = mutableListOf<String>()
     if (s.verified == true && s.topic != "series") parts += "${stepCountOf(s)} steps"

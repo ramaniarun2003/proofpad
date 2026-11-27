@@ -80,17 +80,35 @@ class SolveResponse(BaseModel):
 
 
 class VerifyRequest(BaseModel):
-    session_id: str
-    latex: str
+    """
+    Two shapes. Student chain (Identify → Check): `problem_latex` + `user_steps`, the student's own
+    lines in order. Edited generated chain (older clients): `latex` + `steps`.
+    """
+    session_id: str = ""
+    latex: str = ""
+    problem_latex: str = ""
     topic: Topic = Topic.unknown
     variable: str = "x"
-    steps: list[Step]
+    steps: list[Step] = []
+    user_steps: Optional[list[str]] = None
+
+
+class UserStepCheck(BaseModel):
+    latex: str
+    status: str                      # "ok" | "wrong" | "unparseable"
+    rule: str = ""                   # rule name, "skipped n steps: …", or "unrecognized but correct"
+    hint: str = ""                   # common-mistake hint, or what the last step still lacks
 
 
 class VerifyResponse(BaseModel):
     verified: bool
     mismatch_at: Optional[int] = None
     details: list[str] = []
+    # Student-chain fields (empty for the edited-generated-chain shape).
+    verdict: str = ""                # "verified" | "mismatch" | "incomplete"
+    steps: list[UserStepCheck] = []
+    expected_final: str = ""
+    user_final_equals_expected: bool = False
 
 
 class ExportRequest(BaseModel):
