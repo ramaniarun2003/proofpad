@@ -117,7 +117,8 @@ fun NotepadLabel(text: String, modifier: Modifier = Modifier, fontSize: Int = 15
 /**
  * A full notepad screen: [NotepadHeader] on top, a ruled, scrollable paper body
  * (content left-indented past the red margin), and a [NotepadBottomBar] below.
- * [bodyModifier] lets a caller opt out of scrolling when it manages its own list.
+ * [scrollable] = false gives the body a bounded height, for a caller that fills it
+ * itself (e.g. the crop canvas) instead of scrolling.
  */
 @Composable
 fun NotepadPage(
@@ -125,6 +126,7 @@ fun NotepadPage(
     caption: String?,
     bottomBar: @Composable RowScope.() -> Unit,
     underHeader: (@Composable () -> Unit)? = null,
+    scrollable: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
@@ -135,7 +137,7 @@ fun NotepadPage(
                 .weight(1f)
                 .fillMaxWidth()
                 .ruledPaper()
-                .verticalScroll(rememberScrollState())
+                .then(if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
                 .padding(start = 56.dp, end = 20.dp, top = 12.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp),
             content = content,
