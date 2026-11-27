@@ -59,11 +59,29 @@ with explicit differentials. The solver evaluates one variable per step and retu
 `422` if it cannot evaluate the integral symbolically.
 
 ## `POST /verify`
-Same shape as `/solve` plus `steps: [...]` (the user's edited chain). Returns
-`{"verified": bool, "mismatch_at": int|null, "details": [...]}`. Not supported for series.
-The app sends `problem_latex` as `latex` and the student's steps as the chain
-(`steps[0].before_latex` = the problem, each later `before_latex` = the previous step). For a
-limit, every step must equal the limit's value.
+Checks the **student's own chain** (the Identify split of a capture):
+```json
+{"session_id": "…", "problem_latex": "\\frac{d}{d x} \\sin (3 x)", "topic": "unknown", "user_steps": ["\\cos (3 x)"]}
+```
+Response `200`:
+```json
+{"verdict": "mismatch", "verified": false, "mismatch_at": 0,
+ "steps": [{"latex": "\\cos (3 x)", "status": "wrong", "rule": "",
+            "hint": "chain rule missing: you differentiated the outside only; multiply by the derivative of the inside, 3"}],
+ "expected_final": "3 \\cos{\\left(3 x \\right)}", "user_final_equals_expected": false, "details": ["…"]}
+```
+- `verdict`: `verified`, `mismatch` (first wrong or unparseable step is `mismatch_at`), or `incomplete`
+  (every step right, but the last is not the final answer: an operator left, bounds not applied, or no `+ C`).
+- Step `status`: `ok` | `wrong` | `unparseable`. Each step is compared with the independent SymPy result
+  (`simplify(a - b) == 0`, then numeric sampling at 7 points); equivalence is what counts.
+- Step `rule` is a label: our rule name when the step is the next state of our own chain, `skipped n steps`
+  when it is a later state, `unrecognized but correct` otherwise.
+- Step `hint`: sign flipped, chain rule missing, wrong power, off by a constant factor, missing constant of
+  integration; for a skipped step, which rules it folded together.
+- The operator written in `problem_latex` decides the topic. Series chains return `422`.
+
+Older shape, still accepted: `latex` + `steps: [...]` (an edited generated chain) returns
+`verified`, `mismatch_at`, `details` and `verdict`.
 
 ## `POST /export`
 `{"session_id": "…"}` → the stored session as JSON (image, LaTeX, steps, answer, verification).

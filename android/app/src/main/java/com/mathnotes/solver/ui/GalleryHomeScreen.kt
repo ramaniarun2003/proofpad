@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.data.db.FolderWithCount
+import com.mathnotes.solver.data.api.Verdict
 import com.mathnotes.solver.data.db.SessionEntity
 import com.mathnotes.solver.ui.components.CheckIcon
 import com.mathnotes.solver.ui.components.CrossIcon
@@ -286,10 +287,12 @@ private fun NoteRow(note: SessionEntity, folderName: String?, now: Long, onClick
 
 @Composable
 private fun StatusGlyph(note: SessionEntity, size: androidx.compose.ui.unit.Dp) {
-    when (note.verified) {
-        true -> CheckIcon(NotepadColors.Green, size)
-        false -> CrossIcon(NotepadColors.Red, size)
-        null -> Text("·", fontFamily = NotepadFonts.PatrickHand, color = NotepadColors.Muted)
+    when {
+        note.verified == true -> CheckIcon(NotepadColors.Green, size)
+        Verdict.of(note.verified, note.mismatchAt) == Verdict.INCOMPLETE ->
+            Text("…", fontFamily = NotepadFonts.PatrickHand, color = NotepadColors.DifficultyMedium)
+        note.verified == false -> CrossIcon(NotepadColors.Red, size)
+        else -> Text("·", fontFamily = NotepadFonts.PatrickHand, color = NotepadColors.Muted)
     }
 }
 
@@ -301,12 +304,13 @@ private fun difficultyLabel(d: Difficulty?): String = when (d) {
     Difficulty.EASY -> "Easy"; Difficulty.MEDIUM -> "Medium"; Difficulty.HARD -> "Hard"; null -> ""
 }
 
-private fun statusText(n: SessionEntity): String = when (n.verified) {
-    true -> "verified"; false -> "step ${(n.mismatchAt ?: 0) + 1}"; null -> ""
+private fun statusText(n: SessionEntity): String = when (Verdict.of(n.verified, n.mismatchAt)) {
+    Verdict.VERIFIED -> "verified"; Verdict.INCOMPLETE -> "almost"; Verdict.MISMATCH -> "step ${(n.mismatchAt ?: 0) + 1}"; else -> ""
 }
 
-private fun statusColor(n: SessionEntity): Color = when (n.verified) {
-    true -> NotepadColors.Green; false -> NotepadColors.Red; null -> NotepadColors.Muted
+private fun statusColor(n: SessionEntity): Color = when (Verdict.of(n.verified, n.mismatchAt)) {
+    Verdict.VERIFIED -> NotepadColors.Green; Verdict.INCOMPLETE -> NotepadColors.DifficultyMedium
+    Verdict.MISMATCH -> NotepadColors.Red; else -> NotepadColors.Muted
 }
 
 private fun relativeTime(ts: Long, now: Long): String {

@@ -51,7 +51,34 @@ data class Step(
     @Json(name = "before_latex") val beforeLatex: String,
     @Json(name = "after_latex") val afterLatex: String,
     val note: String = "",
-)
+    // Set only on steps the app builds from a student-chain /verify (never sent by /solve):
+    // status = "ok" | "wrong" | "unparseable"; source = "student" | "solution" (ours, shown below).
+    val status: String? = null,
+    val source: String? = null,
+) {
+    val isStudent: Boolean get() = source == SOURCE_STUDENT
+    val isSolution: Boolean get() = source == SOURCE_SOLUTION
+
+    companion object {
+        const val SOURCE_STUDENT = "student"
+        const val SOURCE_SOLUTION = "solution"
+    }
+}
+
+/** The three outcomes of checking a student's chain, and how a stored session maps onto them. */
+object Verdict {
+    const val VERIFIED = "verified"
+    const val MISMATCH = "mismatch"
+    const val INCOMPLETE = "incomplete"
+
+    /** Stored sessions keep (verified, mismatchAt): false with no flagged step means "almost". */
+    fun of(verified: Boolean?, mismatchAt: Int?): String = when {
+        verified == true -> VERIFIED
+        verified == false && mismatchAt == null -> INCOMPLETE
+        verified == false -> MISMATCH
+        else -> ""
+    }
+}
 
 @JsonClass(generateAdapter = false)
 data class SolveRequest(
@@ -70,15 +97,26 @@ data class SolveResponse(
     val verified: Boolean,
     @Json(name = "mismatch_at") val mismatchAt: Int?,
     val details: List<String> = emptyList(),
+    /** App-side only: the verdict of a student-chain check ("" for a generated solution). */
+    val verdict: String = "",
 )
 
+/** Student chain: [problemLatex] + [userSteps], the student's own lines in order. */
 @JsonClass(generateAdapter = false)
 data class VerifyRequest(
     @Json(name = "session_id") val sessionId: String,
-    val latex: String,
+    @Json(name = "problem_latex") val problemLatex: String,
     val topic: String = "unknown",
     val variable: String = "x",
-    val steps: List<Step>,
+    @Json(name = "user_steps") val userSteps: List<String>,
+)
+
+@JsonClass(generateAdapter = false)
+data class UserStepCheck(
+    val latex: String,
+    val status: String,        // "ok" | "wrong" | "unparseable"
+    val rule: String = "",     // rule name, "skipped n steps …", or "unrecognized but correct"
+    val hint: String = "",     // common-mistake hint, or what the last step still lacks
 )
 
 @JsonClass(generateAdapter = false)
@@ -86,6 +124,10 @@ data class VerifyResponse(
     val verified: Boolean,
     @Json(name = "mismatch_at") val mismatchAt: Int?,
     val details: List<String> = emptyList(),
+    val verdict: String = "",  // "verified" | "mismatch" | "incomplete"
+    val steps: List<UserStepCheck> = emptyList(),
+    @Json(name = "expected_final") val expectedFinal: String = "",
+    @Json(name = "user_final_equals_expected") val userFinalEqualsExpected: Boolean = false,
 )
 
 @JsonClass(generateAdapter = false)

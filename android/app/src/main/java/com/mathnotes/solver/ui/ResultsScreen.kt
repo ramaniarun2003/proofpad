@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -36,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mathnotes.solver.data.api.Step
+import com.mathnotes.solver.data.api.Verdict
 import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.export.PdfExporter
 import com.mathnotes.solver.ui.components.HandDrawnBox
@@ -65,6 +67,7 @@ private fun firstNonTrivial(steps: List<Step>): Int? {
 private fun sympyFn(topic: String): String = when (topic) {
     "integral" -> "integrate"
     "derivative" -> "diff"
+    "limit" -> "limit"
     "series" -> "is_convergent"
     else -> "simplify"
 }
@@ -89,6 +92,10 @@ fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery
         verified = result.verified,
         mismatchAt = result.mismatchAt,
         details = result.details,
+        verdict = result.verdict,
+        solutionAnswerLatex = state.solutionAnswer,
+        solutionBusy = state.solutionBusy,
+        onShowSolution = vm::showFullSolution,
         difficulty = state.difficulty,
         onRate = vm::setDifficulty,
         onExport = { PdfExporter.exportAndShare(ctx, state) },
@@ -107,15 +114,28 @@ fun ResultsContent(
     verified: Boolean,
     mismatchAt: Int?,
     details: List<String>,
+    verdict: String = "",
+    solutionAnswerLatex: String = "",
+    solutionBusy: Boolean = false,
+    onShowSolution: (() -> Unit)? = null,
     difficulty: Difficulty? = null,
     onRate: (Difficulty) -> Unit = {},
     onExport: () -> Unit,
     onNewProblem: () -> Unit,
     onSaveToGallery: (() -> Unit)? = null,
 ) {
+    // A student-chain check: the rows are the student's own lines, each with its own status;
+    // our solution (if asked for) is listed separately below, muted.
+    val allSteps = steps
+    val solutionSteps = allSteps.filter { it.isSolution }
+    @Suppress("NAME_SHADOWING")
+    val steps = allSteps.filterNot { it.isSolution }
+    val isStudentChain = steps.any { it.isStudent }
+    val isIncomplete = isStudentChain && verdict == Verdict.INCOMPLETE
+
     val flaggedIndex = if (!verified) mismatchAt else null
     val isFlagged = flaggedIndex != null
-    var selected by remember(steps) { mutableStateOf<Int?>(firstNonTrivial(steps)) }
+    var selected by remember(steps) { mutableStateOf<Int?>(if (isStudentChain) null else firstNonTrivial(steps)) }
     val density = LocalDensity.current
 
     NotepadPage(
@@ -149,8 +169,13 @@ fun ResultsContent(
                 LatexView(problemLatex, Modifier.padding(top = 2.dp), textSizePx = with(density) { 26.sp.toPx() })
             }
             Stamp(
-                text = if (verified) "VERIFIED" else "CHECK STEP ${(flaggedIndex ?: 0) + 1}",
+                text = when {
+                    verified -> "VERIFIED"
+                    isIncomplete -> "ALMOST, finish it"
+                    else -> "CHECK STEP ${(flaggedIndex ?: 0) + 1}"
+                },
                 verified = verified,
+                tint = if (isIncomplete) NotepadColors.DifficultyMedium else null,
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 6.dp),
             )
         }
@@ -160,6 +185,9 @@ fun ResultsContent(
         // Steps.
         steps.forEachIndexed { i, step ->
             val status = when {
+                // The verifier judged each of the student's lines on its own.
+                step.isStudent && step.status == "ok" -> StepStatus.Verified
+                step.isStudent -> StepStatus.Flagged
                 isFlagged && i < flaggedIndex!! -> StepStatus.Verified
                 isFlagged && i == flaggedIndex -> StepStatus.Flagged
                 isFlagged -> StepStatus.Pending
@@ -179,7 +207,24 @@ fun ResultsContent(
         Spacer(Modifier.height(10.dp))
 
         // Explanation / verifier note.
-        if (isFlagged) {
+        if (isFlagged && isStudentChain) {
+            // The hint for the first wrong step, in the pink verifier note.
+            val n = flaggedIndex!! + 1
+            val bad = steps.getOrNull(flaggedIndex)
+            val fallback = if (bad?.status == "unparseable") "I could not read step $n." else
+                "Step $n doesn't follow from ${if (n == 1) "the problem" else "step ${n - 1}"}."
+            VerifierNote(message = bad?.note?.ifBlank { fallback } ?: fallback, resolveFromStep = null)
+        } else if (isIncomplete) {
+            StickyNote(rotationDeg = 1.5f) {
+                Text("almost there", fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp, color = NotepadColors.Muted)
+                Text(
+                    "Every step is right, but it is " + (steps.lastOrNull()?.note?.ifBlank { null } ?: "not the final answer yet") + ".",
+                    fontFamily = NotepadFonts.PatrickHand,
+                    fontSize = 17.sp,
+                    color = NotepadColors.NoteInkYellow,
+                )
+            }
+        } else if (isFlagged) {
             val n = flaggedIndex!! + 1
             VerifierNote(
                 message = details.joinToString(" ").ifBlank { "Step $n doesn't match step ${n - 1}." },
@@ -212,7 +257,16 @@ fun ResultsContent(
                 )
             }
             Spacer(Modifier.width(8.dp))
-            if (isFlagged) {
+            if (isIncomplete) {
+                HandDrawnBox(dashed = true) {
+                    Text(
+                        "not the final answer yet",
+                        fontFamily = NotepadFonts.PatrickHand,
+                        fontSize = 20.sp,
+                        color = NotepadColors.Held,
+                    )
+                }
+            } else if (isFlagged) {
                 HandDrawnBox(dashed = true) {
                     Text(
                         "held until step ${flaggedIndex!! + 1} is fixed",
@@ -228,6 +282,47 @@ fun ResultsContent(
             }
         }
 
+        // Secondary action for a student chain: our own worked solution, listed below theirs.
+        if (isStudentChain && onShowSolution != null && solutionSteps.isEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            OutlinedButton(
+                onClick = onShowSolution,
+                enabled = !solutionBusy,
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, NotepadColors.ChipBorder),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+            ) {
+                Text(
+                    if (solutionBusy) "Solving…" else "Show me the full solution",
+                    fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Ink,
+                )
+            }
+        }
+        if (solutionSteps.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            NotepadLabel("the full solution", fontSize = 16)
+            Column(Modifier.alpha(0.6f)) {
+                solutionSteps.forEachIndexed { i, step ->
+                    StepRow(
+                        number = i + 1,
+                        rule = step.rule,
+                        exprLatex = step.afterLatex,
+                        status = StepStatus.Plain,
+                        selected = false,
+                        onClick = {},
+                    )
+                }
+                if (solutionAnswerLatex.isNotBlank()) {
+                    Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        NotepadLabel("answer", fontSize = 16)
+                        Spacer(Modifier.width(10.dp))
+                        LatexView(solutionAnswerLatex, textSizePx = with(density) { 22.sp.toPx() }, fillWidth = false)
+                    }
+                }
+            }
+        }
+
         Spacer(Modifier.height(16.dp))
 
         DifficultyRatingRow(difficulty = difficulty, onRate = onRate)
@@ -235,8 +330,12 @@ fun ResultsContent(
         Spacer(Modifier.height(10.dp))
 
         // Muted footnote.
-        val footnote = if (isFlagged) {
+        val footnote = if (isIncomplete) {
+            "your steps agree with SymPy ${sympyFn(topic)}(); the last line is not final yet"
+        } else if (isFlagged) {
             "expected final shown once step ${flaggedIndex!! + 1} is fixed"
+        } else if (isStudentChain) {
+            "your steps checked against SymPy ${sympyFn(topic)}(): every line agrees"
         } else {
             "checked against SymPy ${sympyFn(topic)}(): agrees at every step"
         }
@@ -259,13 +358,16 @@ fun ResultsContent(
 }
 
 @Composable
-private fun VerifierNote(message: String, resolveFromStep: Int) {
+private fun VerifierNote(message: String, resolveFromStep: Int?) {
     StickyNote(background = NotepadColors.StickyPink, rotationDeg = -1.5f) {
         Text("verifier says", fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp, color = NotepadColors.NoteInkPink)
         Text(message, fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.NoteInkPink)
-        Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            NoteAction("Edit step", filled = false)
-            NoteAction("Re-solve from step $resolveFromStep", filled = true)
+        // The two chips are visual only; a student-chain note (resolveFromStep == null) leaves them out.
+        if (resolveFromStep != null) {
+            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                NoteAction("Edit step", filled = false)
+                NoteAction("Re-solve from step $resolveFromStep", filled = true)
+            }
         }
     }
 }

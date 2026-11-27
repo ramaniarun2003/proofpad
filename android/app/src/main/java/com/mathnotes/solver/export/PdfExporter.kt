@@ -78,14 +78,26 @@ object PdfExporter {
         text("Recognized expression", title)
         latex(state.latex, 22f)
         y += 8
-        text("Steps", title)
         val result = state.result
-        result?.steps?.forEachIndexed { i, s ->
-            text("${i + 1}. ${s.rule}${if (result.mismatchAt == i) "  (verification mismatch)" else ""}", body)
+        val own = result?.steps.orEmpty().filterNot { it.isSolution }
+        val ours = result?.steps.orEmpty().filter { it.isSolution }
+        text(if (own.any { it.isStudent }) "Your steps" else "Steps", title)
+        own.forEachIndexed { i, s ->
+            text("${i + 1}. ${s.rule}${if (result?.mismatchAt == i) "  (verification mismatch)" else ""}", body)
             latex(s.afterLatex, 18f)
+            if (s.isStudent && s.note.isNotBlank()) text("   ${s.note}", body)
+        }
+        if (ours.isNotEmpty()) {
+            y += 8
+            text("Full solution", title)
+            ours.forEachIndexed { i, s -> text("${i + 1}. ${s.rule}", body); latex(s.afterLatex, 18f) }
         }
         y += 8
-        text("Answer" + if (result?.verified == true) " (verified)" else "", title)
+        text("Answer" + when {
+            result?.verified == true -> " (verified)"
+            result?.verdict == "incomplete" -> " (almost, not finished)"
+            else -> ""
+        }, title)
         latex(result?.answerLatex ?: "", 24f)
 
         doc.finishPage(page)

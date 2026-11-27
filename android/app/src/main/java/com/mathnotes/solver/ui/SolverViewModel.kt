@@ -10,6 +10,7 @@ import com.mathnotes.solver.data.api.BackendState
 import com.mathnotes.solver.data.WelcomePrefs
 import com.mathnotes.solver.data.api.SolveResponse
 import com.mathnotes.solver.data.api.Step
+import com.mathnotes.solver.data.api.Verdict
 import com.mathnotes.solver.data.db.Difficulty
 import com.mathnotes.solver.data.db.FolderWithCount
 import com.mathnotes.solver.data.db.HandwritingSample
@@ -58,6 +59,10 @@ data class SolverUiState(
     val splitAtEquals: Boolean = false,
     /** `=` signs but no operator found: the problem field may hold the student's work too. */
     val splitUncertain: Boolean = false,
+    /** /solve is running for "Show me the full solution". */
+    val solutionBusy: Boolean = false,
+    /** Our answer, once the full solution has been fetched. */
+    val solutionAnswer: String = "",
     val isVerifyMode: Boolean = false,
     /** SUGGEST-mode corrections the Review screen offers as a one-tap swap. */
     val suggestions: List<CorrectionSuggestion> = emptyList(),
@@ -255,7 +260,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
      * Auto); when set, it overrides the recognizer's guess so Review and Solve use it.
      */
     fun captureAndRecognize(raw: File, crop: CropSpec? = null, topicHint: String = "unknown") {
-        _state.update { it.copy(busy = true, status = "Preprocessing…", error = null, result = null) }
+        _state.update { it.copy(busy = true, status = "Preprocessing…", error = null, result = null, solutionAnswer = "", solutionBusy = false) }
         val debug = debugImages
         val threshold = useAdaptiveThreshold
         viewModelScope.launch {
@@ -331,32 +336,61 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(busy = true, status = "Verifying steps…", error = null) }
         viewModelScope.launch {
             try {
-                val stepObjects = chain.mapIndexed { index, expr ->
+                Timber.i("verify: problem=%s | steps=%s", s.latex, chain)
+                val check = repo.verify(s.sessionId, s.latex, s.topic, chain)
+                // The student's lines become the result's steps: rule caption + hint come from the verifier.
+                val stepObjects = check.steps.mapIndexed { index, st ->
                     Step(
                         index = index,
-                        rule = "user step ${index + 1}",
-                        beforeLatex = if (index == 0) s.latex else chain[index - 1],
-                        afterLatex = expr,
-                        note = "",
+                        rule = st.rule.ifBlank { "your step ${index + 1}" },
+                        beforeLatex = if (index == 0) s.latex else check.steps[index - 1].latex,
+                        afterLatex = st.latex,
+                        note = st.hint,
+                        status = st.status,
+                        source = Step.SOURCE_STUDENT,
                     )
                 }
-                Timber.i("verify: problem=%s | steps=%s", s.latex, chain)
-                val verifyResp = repo.verify(s.sessionId, s.latex, "unknown", stepObjects)
-                repo.saveVerification(s.sessionId, s.latex, s.topic, stepObjects, verifyResp.verified, verifyResp.mismatchAt)
+                val verdict = check.verdict.ifBlank { Verdict.of(check.verified, check.mismatchAt) }
+                Timber.i("verify: verdict=%s mismatch_at=%s | %s", verdict, check.mismatchAt,
+                    check.steps.joinToString(" | ") { "${it.status}:${it.rule}:${it.hint}" })
+                repo.saveVerification(s.sessionId, s.latex, s.topic, stepObjects, check.verified, check.mismatchAt)
 
                 val solveResp = SolveResponse(
                     sessionId = s.sessionId,
                     topic = s.topic,
                     steps = stepObjects,
                     answerLatex = stepObjects.lastOrNull()?.afterLatex ?: s.latex,
-                    verified = verifyResp.verified,
-                    mismatchAt = verifyResp.mismatchAt,
-                    details = verifyResp.details,
+                    verified = check.verified,
+                    mismatchAt = check.mismatchAt,
+                    details = check.details,
+                    verdict = verdict,
                 )
 
                 _state.update { it.copy(busy = false, status = "", result = solveResp) }
             } catch (e: Exception) {
                 _state.update { it.copy(busy = false, status = "", error = describe(e)) }
+            }
+        }
+    }
+
+    /**
+     * "Show me the full solution": run /solve for the same problem and append our steps below the
+     * student's (marked [Step.SOURCE_SOLUTION]); the note is re-saved with both.
+     */
+    fun showFullSolution() {
+        val s = _state.value
+        val current = s.result ?: return
+        if (current.steps.any { it.isSolution } || s.solutionBusy) return
+        _state.update { it.copy(solutionBusy = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val solved = repo.solveOnly(s.sessionId, s.latex, s.topic)
+                val ours = solved.steps.map { it.copy(source = Step.SOURCE_SOLUTION) }
+                val all = current.steps + ours
+                repo.saveVerification(s.sessionId, s.latex, s.topic, all, current.verified, current.mismatchAt)
+                _state.update { it.copy(solutionBusy = false, result = current.copy(steps = all), solutionAnswer = solved.answerLatex) }
+            } catch (e: Exception) {
+                _state.update { it.copy(solutionBusy = false, error = describe(e)) }
             }
         }
     }
@@ -403,7 +437,11 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                 result = SolveResponse(
                     sessionId = session.sessionId, topic = session.topic, steps = repo.stepsOf(session),
                     answerLatex = session.answerLatex, verified = session.verified ?: false, mismatchAt = session.mismatchAt,
+                    // A note saved from a student-chain check keeps its verdict (incl. "almost").
+                    verdict = if (repo.stepsOf(session).any { it.isStudent }) Verdict.of(session.verified, session.mismatchAt) else "",
                 ),
+                solutionAnswer = repo.stepsOf(session).lastOrNull { it.isSolution }?.afterLatex ?: "",
+                solutionBusy = false,
             )
         }
     }

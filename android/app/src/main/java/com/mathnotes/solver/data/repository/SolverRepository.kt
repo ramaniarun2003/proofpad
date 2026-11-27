@@ -157,8 +157,15 @@ class SolverRepository(context: Context) {
         resp
     }
 
-    suspend fun verify(sessionId: String, latex: String, topic: String = "unknown", steps: List<Step>): VerifyResponse =
-        withContext(Dispatchers.IO) { api.verify(VerifyRequest(sessionId = sessionId, latex = latex, topic = topic, steps = steps)) }
+    /** Check the student's own chain: the problem plus their steps, in order. */
+    suspend fun verify(sessionId: String, problemLatex: String, topic: String, userSteps: List<String>): VerifyResponse =
+        withContext(Dispatchers.IO) {
+            api.verify(VerifyRequest(sessionId = sessionId, problemLatex = problemLatex, topic = topic, userSteps = userSteps))
+        }
+
+    /** Our own solution for the same problem, without touching the stored session (the caller saves). */
+    suspend fun solveOnly(sessionId: String, latex: String, topic: String): SolveResponse =
+        withContext(Dispatchers.IO) { api.solve(SolveRequest(sessionId = sessionId, latex = latex, topic = topic)) }
 
     suspend fun saveVerification(
         sessionId: String,
@@ -174,7 +181,7 @@ class SolverRepository(context: Context) {
                 confirmedLatex = latex,
                 topic = topic,
                 stepsJson = stepsAdapter.toJson(steps),
-                answerLatex = steps.lastOrNull()?.afterLatex ?: latex,
+                answerLatex = steps.lastOrNull { !it.isSolution }?.afterLatex ?: latex,
                 verified = verified,
                 mismatchAt = mismatchAt,
             )

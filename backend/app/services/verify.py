@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import random
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import takewhile
 
 import sympy as sp
@@ -18,7 +18,7 @@ from ..models import Topic
 from .steps.base import Solution, StepRec
 from .symbolic import Parsed, parse
 
-N_SAMPLES = 6
+N_SAMPLES = 7
 TOL = 1e-6
 
 
@@ -246,3 +246,247 @@ def verify_latex_steps(p: Parsed, topic: Topic,
 
     sol = Solution(steps=recs, answer=recs[-1].after)
     return verify(p, topic, sol)
+
+
+# --- Checking the student's own chain (Identify → Check) ---------------------------------------
+#
+# The student's steps come from the Identify split of a capture, not from our generator. Each
+# step is judged on equivalence to the independently computed result; the rule name is only a
+# label found by looking the step up on our own chain. Many ways to solve one problem is fine.
+
+_OPERATORS = (sp.Derivative, sp.Integral, sp.Limit, sp.Sum)
+
+
+@dataclass
+class UserStepResult:
+    latex: str
+    status: str            # "ok" | "wrong" | "unparseable"
+    rule: str = ""         # our rule name, "skipped n steps…", or "unrecognized but correct"
+    hint: str = ""         # common-mistake hint for a wrong step, or what is missing from the last one
+
+
+@dataclass
+class UserChainResult:
+    verdict: str                       # "verified" | "mismatch" | "incomplete"
+    mismatch_at: int | None
+    steps: list[UserStepResult] = field(default_factory=list)
+    expected_final: str = ""
+    user_final_equals_expected: bool = False
+    details: list[str] = field(default_factory=list)
+
+
+def _parse_user_step(text: str) -> sp.Basic:
+    """Parse one student step with the project parser (same handling as edited steps)."""
+    text = text.strip().lstrip("=").strip()
+    if not text:
+        raise ValueError("the step is empty")
+    if text.count("{") != text.count("}") or text.count("(") != text.count(")"):
+        raise ValueError("brackets do not match")   # the LaTeX parser would silently guess
+    if text.count(r"\int") > 1 and re.search(r"[+-]\s*(?:\d+(?:\.\d+)?\s*)?\\int", text):
+        terms = re.split(r"(?=[+-]\s*(?:\d+(?:\.\d+)?\s*)?\\int)", text)
+        return sp.Add(*[parse(term.lstrip("+ ")).expr for term in terms if term.strip()])
+    return parse(text).expr
+
+
+def _rebuild(e: sp.Basic) -> sp.Basic:
+    """Re-evaluate arithmetic the LaTeX parser left unevaluated, without running any operator."""
+    if not isinstance(e, sp.Basic) or e.is_Atom:
+        return e
+    try:
+        return e.func(*[_rebuild(a) for a in e.args])
+    except Exception:
+        return e
+
+
+def _same_form(a: sp.Basic, b: sp.Basic, const_wrt: sp.Symbol | None) -> bool:
+    """
+    Is `a` the same written state as `b` (not merely equivalent)? Compared after expanding, with
+    operators left unevaluated; for antiderivatives a difference that is constant is ignored.
+    """
+    try:
+        diff = sp.expand(_rebuild(a)) - sp.expand(_rebuild(b))
+    except Exception:
+        return False
+    if diff == 0:
+        return True
+    if const_wrt is not None and not diff.has(*_OPERATORS) and not diff.has(const_wrt):
+        return True
+    return False
+
+
+def _constant_symbols(expr: sp.Basic, p: Parsed) -> set[sp.Symbol]:
+    """Symbols in a student's step that the problem does not have — i.e. their `+ C`."""
+    return set(expr.free_symbols) - set(p.expr.free_symbols) - {p.var}
+
+
+def _outer_only_derivatives(p: Parsed) -> list[tuple[sp.Basic, sp.Basic]]:
+    """
+    What a student gets by forgetting the chain rule: f'(u) without the factor u'. Returns
+    (wrong derivative, u') for every inside `u` the whole expression depends on only through u.
+    """
+    f, var = p.inner, p.var
+    insides: list[sp.Basic] = []
+    for node in sp.preorder_traversal(f):
+        if isinstance(node, sp.Function) and node.args and node.args[0] != var and node.args[0].has(var):
+            insides.append(node.args[0])
+        if isinstance(node, sp.Pow) and node.base != var and node.base.has(var) and not node.base.is_Atom:
+            insides.append(node.base)
+        if isinstance(node, sp.Pow) and node.base == sp.E and node.exp != var and node.exp.has(var):
+            insides.append(node.exp)
+    out = []
+    for u in insides:
+        t = sp.Dummy("t")
+        g = f.subs(u, t)
+        if g.has(var):
+            continue
+        du = sp.diff(u, var)
+        if du in (0, 1):
+            continue
+        out.append((sp.diff(g, t).subs(t, u), du))
+    return out
+
+
+def _mistake_hint(a: sp.Basic, expected: sp.Basic, p: Parsed, topic: Topic,
+                  anti_vars: tuple[sp.Symbol, ...]) -> str:
+    """Name a common mistake that turns `expected` into the student's `a`, if one fits."""
+    var = p.var
+    try:
+        if equivalent(a, -expected, anti_vars):
+            return "sign flipped: your step is the negative of what it should be"
+    except Exception:
+        pass
+    if topic == Topic.derivative:
+        for wrong, du in _outer_only_derivatives(p):
+            try:
+                if equivalent(a, wrong):
+                    return ("chain rule missing: you differentiated the outside only; "
+                            f"multiply by the derivative of the inside, {sp.latex(du)}")
+            except Exception:
+                continue
+    try:
+        consts = {c: 0 for c in _constant_symbols(a, p)}
+        ratio = sp.simplify(a.doit().subs(consts) / expected.doit())
+    except Exception:
+        return ""
+    if ratio in (sp.nan, sp.zoo, 0) or ratio.has(sp.nan, sp.zoo):
+        return ""
+    for shifted in (ratio / var, ratio * var):
+        shifted = sp.simplify(shifted)
+        if shifted != 0 and not shifted.free_symbols:
+            return ("wrong power: the exponent is off by one "
+                    "(it goes down by 1 when you differentiate, up by 1 when you integrate)")
+    if not ratio.free_symbols and ratio != 1:
+        return f"off by a constant factor: your step is {sp.latex(ratio)} times what it should be"
+    return ""
+
+
+def verify_user_steps(p: Parsed, topic: Topic, user_steps: list[str]) -> UserChainResult:
+    """
+    Check a student's chain for the problem `p`.
+
+    The expected result comes from the independent SymPy call (diff / integrate / limit). Every
+    step must be equivalent to it — `simplify(a - b) == 0`, then numeric sampling at 7 points —
+    which is the same as each step following from the previous correct one. The verdict is
+    "mismatch" at the first wrong or unparseable step, "incomplete" when every step is right but
+    the last one is not yet the final answer, else "verified".
+    """
+    from . import steps as step_service  # the generator is only used to *label* correct steps
+
+    if topic == Topic.series:
+        raise ValueError("series steps cannot be checked step by step; re-run /solve")
+    truth = _truth(p, topic)
+    indefinite = topic == Topic.integral and p.limits is None and p.iterated_integral is None
+    definite = topic == Topic.integral and p.limits is not None and p.iterated_integral is None
+    anti_vars: tuple[sp.Symbol, ...] = (p.var,) if indefinite else ()
+    dne = isinstance(truth, str)
+    expected_final = truth if dne else sp.latex(truth) + (" + C" if indefinite else "")
+    antiderivative = sp.integrate(p.inner, p.var) if definite else None
+
+    # Our own chain, used only to name the rule behind a correct step.
+    try:
+        _, sol = step_service.solve(p, topic)
+        chain = [s for s in sol.steps if s.verdict is None]
+    except Exception:
+        chain = []
+    pos = -1   # index of the last state of our chain the student has reached
+
+    results: list[UserStepResult] = []
+    mismatch_at: int | None = None
+    last_expr: sp.Basic | None = None
+    last_is_antiderivative = False
+
+    for i, text in enumerate(user_steps):
+        try:
+            expr = _parse_user_step(text)
+        except Exception as exc:
+            results.append(UserStepResult(text, "unparseable", hint=f"I could not read this step: {str(exc)[:120]}"))
+            mismatch_at = i if mismatch_at is None else mismatch_at
+            continue
+
+        if dne:
+            results.append(UserStepResult(text, "wrong", hint="the one-sided limits differ, so this limit does not exist"))
+            mismatch_at = i if mismatch_at is None else mismatch_at
+            continue
+
+        ok = False
+        is_anti = False
+        try:
+            if topic == Topic.limit:
+                ok = _values_equal(expr.doit() if expr.has(sp.Limit) else expr, truth)
+            else:
+                ok = equivalent(expr, truth, anti_vars)
+                if not ok and definite:   # the antiderivative, before the bounds are applied
+                    ok = is_anti = equivalent(expr, antiderivative, (p.var,))
+        except Exception:
+            ok = False
+
+        if not ok:
+            hint = ""
+            try:
+                hint = _mistake_hint(expr, truth, p, topic, anti_vars)
+            except Exception:
+                hint = ""
+            results.append(UserStepResult(text, "wrong", hint=hint))
+            mismatch_at = i if mismatch_at is None else mismatch_at
+            continue
+
+        # Label the step: where on our chain does this written form sit?
+        rule = "unrecognized but correct"
+        note = ""
+        for j in range(pos + 1, len(chain)):
+            if _same_form(expr, chain[j].after, p.var if (indefinite or definite) else None):
+                skipped = j - pos - 1
+                if skipped == 0:
+                    rule = chain[j].rule
+                else:
+                    # Short label for the row; which rules were folded in goes in the note.
+                    names = ", ".join(s.rule for s in chain[pos + 1:j + 1][:5])
+                    rule = f"skipped {skipped} step{'s' if skipped != 1 else ''}"
+                    note = f"correct; this line does several rules at once: {names}"
+                pos = j
+                break
+        results.append(UserStepResult(text, "ok", rule=rule, hint=note))
+        last_expr, last_is_antiderivative = expr, is_anti
+
+    if mismatch_at is not None:
+        bad = results[mismatch_at]
+        detail = f"step {mismatch_at}: {bad.hint or ('could not be read' if bad.status == 'unparseable' else 'is not equivalent to the previous line')}"
+        return UserChainResult("mismatch", mismatch_at, results, expected_final, False, [detail])
+
+    if not results:
+        return UserChainResult("incomplete", None, results, expected_final, False, ["no steps were provided"])
+
+    # Every step is right. Is the last one the final answer?
+    missing = ""
+    if last_expr is not None:
+        if last_expr.has(*_OPERATORS):
+            missing = "not finished: this line still has an operator to carry out"
+        elif last_is_antiderivative:
+            missing = "not finished: apply the bounds to this antiderivative"
+        elif indefinite and not _constant_symbols(last_expr, p):
+            missing = "missing constant of integration: add + C"
+    if missing:
+        results[-1].hint = missing
+        return UserChainResult("incomplete", None, results, expected_final, False,
+                               [f"direct result: {expected_final}", missing])
+    return UserChainResult("verified", None, results, expected_final, True, [f"direct result: {expected_final}"])

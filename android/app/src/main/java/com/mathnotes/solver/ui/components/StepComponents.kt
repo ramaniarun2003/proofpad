@@ -46,8 +46,9 @@ fun Stamp(
     modifier: Modifier = Modifier,
     fontSize: androidx.compose.ui.unit.TextUnit = 20.sp,
     rotation: Float = -8f,
+    tint: Color? = null,
 ) {
-    val color = if (verified) NotepadColors.Green else NotepadColors.Red
+    val color = tint ?: if (verified) NotepadColors.Green else NotepadColors.Red
     Box(
         modifier
             .graphicsLayer { rotationZ = rotation; alpha = 0.88f }
@@ -107,6 +108,8 @@ fun StepRow(
                 fontFamily = NotepadFonts.PatrickHand,
                 fontSize = 15.sp,
                 color = if (status == StepStatus.Flagged) NotepadColors.Red else NotepadColors.Muted,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
             LatexView(exprLatex, textSizePx = exprPx)
         }
