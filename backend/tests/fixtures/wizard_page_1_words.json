@@ -1,0 +1,261 @@
+{
+  "request_id": "4b09156b-15d0-4b3d-8c99-d53a1f25b2cb",
+  "version": "SuperNet-202",
+  "is_printed": true,
+  "is_handwritten": false,
+  "auto_rotate_confidence": 3.3835650725677624e-08,
+  "auto_rotate_degrees": 0,
+  "image_height": 2000,
+  "image_width": 1506,
+  "page_confidence": {
+    "confidence": null,
+    "text_confidence": 0.2796792394507861,
+    "layout_confidence": null,
+    "method": "prototype_min_v1"
+  },
+  "word_data": [
+    {
+      "type": "header",
+      "cnt": [
+        [
+          258,
+          84
+        ],
+        [
+          386,
+          84
+        ],
+        [
+          386,
+          192
+        ],
+        [
+          258,
+          192
+        ]
+      ],
+      "error_id": "image_not_supported"
+    },
+    {
+      "type": "header",
+      "cnt": [
+        [
+          180,
+          318
+        ],
+        [
+          250,
+          318
+        ],
+        [
+          250,
+          388
+        ],
+        [
+          180,
+          388
+        ]
+      ],
+      "text": "B",
+      "confidence": 0.2796792394507861,
+      "confidence_rate": 0.8086800047904015
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          569,
+          545
+        ],
+        [
+          566,
+          416
+        ],
+        [
+          867,
+          409
+        ],
+        [
+          870,
+          538
+        ]
+      ],
+      "text": "$\\int x^{2} d x$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "\\int x^{2} d x"
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          408,
+          558
+        ],
+        [
+          452,
+          558
+        ],
+        [
+          452,
+          602
+        ],
+        [
+          408,
+          602
+        ]
+      ],
+      "text": "B",
+      "confidence": 0.5461385310172773,
+      "confidence_rate": 0.9041013886724628,
+      "latex": "\\text { B }"
+    },
+    {
+      "type": "header",
+      "cnt": [
+        [
+          392,
+          688
+        ],
+        [
+          468,
+          688
+        ],
+        [
+          468,
+          756
+        ],
+        [
+          392,
+          756
+        ]
+      ],
+      "text": ">",
+      "confidence": 0.3443723632954061,
+      "confidence_rate": 0.8372170197324963
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          502,
+          816
+        ],
+        [
+          507,
+          614
+        ],
+        [
+          1020,
+          628
+        ],
+        [
+          1015,
+          830
+        ]
+      ],
+      "text": "$\\frac{d}{d x} \\sin (3 x)$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "\\frac{d}{d x} \\sin (3 x)"
+    },
+    {
+      "type": "header",
+      "cnt": [
+        [
+          416,
+          972
+        ],
+        [
+          462,
+          972
+        ],
+        [
+          462,
+          1014
+        ],
+        [
+          416,
+          1014
+        ]
+      ],
+      "text": "B",
+      "confidence": 0.8146680314093828,
+      "confidence_rate": 0.9664145184434385
+    },
+    {
+      "type": "header",
+      "cnt": [
+        [
+          396,
+          1098
+        ],
+        [
+          482,
+          1098
+        ],
+        [
+          482,
+          1180
+        ],
+        [
+          396,
+          1180
+        ]
+      ],
+      "text": "$>$",
+      "confidence": 0.8583984375,
+      "confidence_rate": 0.8583984375
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          516,
+          1163
+        ],
+        [
+          453,
+          815
+        ],
+        [
+          886,
+          737
+        ],
+        [
+          949,
+          1085
+        ]
+      ],
+      "text": "$\\sum^{\\frac{e^{x}}{x+1}}$",
+      "confidence": 0.40750100484387985,
+      "confidence_rate": 0.9647285860168913,
+      "latex": "\\sum^{\\frac{e^{x}}{x+1}}"
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          511,
+          1230
+        ],
+        [
+          506,
+          1049
+        ],
+        [
+          1141,
+          1032
+        ],
+        [
+          1146,
+          1213
+        ]
+      ],
+      "text": "$\\lim _{x \\rightarrow 0} \\ln (1+x)$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "\\lim _{x \\rightarrow 0} \\ln (1+x)"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "request_id": "9712085a-bd72-46dd-84a1-3182060d6da9",
+  "version": "SuperNet-202",
+  "is_printed": false,
+  "is_handwritten": true,
+  "auto_rotate_confidence": 3.3835650725677624e-08,
+  "auto_rotate_degrees": 0,
+  "image_height": 2000,
+  "image_width": 1506,
+  "parse_status": "parsed",
+  "fallback_count": 0,
+  "page_confidence": {
+    "confidence": 0.8905147314071655,
+    "text_confidence": null,
+    "layout_confidence": 0.8905147314071655,
+    "method": "prototype_min_v1"
+  },
+  "confidence": 0.9697411060333252,
+  "confidence_rate": 0.9996927857589053,
+  "latex_styled": "\\begin{array}{l}\n\\int x^{2} d x \\\\\n\\frac{d}{d x} \\sin (3 x) \\\\\n\\sum^{x} / x+1 \\\\\n\\lim _{x \\rightarrow 0} \\frac{1}{n^{2}} \\ln (1+x)\n\\end{array}",
+  "text": "$\\begin{array}{l}\\int x^{2} d x \\\\ \\frac{d}{d x} \\sin (3 x) \\\\ \\sum^{x} / x+1 \\\\ \\lim _{x \\rightarrow 0} \\frac{1}{n^{2}} \\ln (1+x)\\end{array}$",
+  "line_data": [
+    {
+      "type": "math",
+      "cnt": [
+        [
+          513,
+          418
+        ],
+        [
+          1144,
+          418
+        ],
+        [
+          1144,
+          1223
+        ],
+        [
+          513,
+          1223
+        ]
+      ],
+      "included": true,
+      "conversion_output": true,
+      "is_printed": false,
+      "is_handwritten": true,
+      "id": "54d7993d844b46e39fc494b58ffb49fd",
+      "text": "$\\begin{array}{l}\\int x^{2} d x \\\\ \\frac{d}{d x} \\sin (3 x) \\\\ \\sum^{x} / x+1 \\\\ \\lim _{x \\rightarrow 0} \\frac{1}{n^{2}} \\ln (1+x)\\end{array}$",
+      "after_hyphen": false,
+      "confidence": 0.9697411060333252,
+      "confidence_rate": 0.9996927857589053
+    }
+  ]
+}

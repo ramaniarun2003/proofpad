@@ -62,6 +62,27 @@ object PdfExporter {
             y += h + 6
         }
 
+        // Verdict stamp, top right — the same three outcomes as the Results screen.
+        state.result?.let { r ->
+            val own = r.steps.filterNot { it.isSolution }
+            val student = own.any { it.isStudent }
+            val label = when {
+                r.verified -> "VERIFIED"
+                student && r.mismatchAt == null -> "ALMOST, finish it"
+                else -> "CHECK STEP ${(r.mismatchAt ?: 0) + 1}"
+            }
+            val ink = when {
+                r.verified -> Color.rgb(0x1F, 0x7A, 0x3A)
+                student && r.mismatchAt == null -> Color.rgb(0xE0, 0xA0, 0x00)
+                else -> Color.rgb(0xC0, 0x39, 0x2B)
+            }
+            val stampText = Paint().apply { color = ink; textSize = 13f; isFakeBoldText = true; isAntiAlias = true }
+            val stampBox = Paint().apply { color = ink; style = Paint.Style.STROKE; strokeWidth = 2f; isAntiAlias = true }
+            val w = stampText.measureText(label)
+            val right = (PAGE_W - MARGIN).toFloat()
+            page.canvas.drawRoundRect(right - w - 16f, y - 2f, right, y + 22f, 5f, 5f, stampBox)
+            page.canvas.drawText(label, right - w - 8f, y + 15f, stampText)
+        }
         text("Handwritten Math Notes — solution", title)
         text("Session ${state.sessionId} · topic: ${state.topic}", body)
         y += 8
@@ -83,9 +104,15 @@ object PdfExporter {
         val ours = result?.steps.orEmpty().filter { it.isSolution }
         text(if (own.any { it.isStudent }) "Your steps" else "Steps", title)
         own.forEachIndexed { i, s ->
-            text("${i + 1}. ${s.rule}${if (result?.mismatchAt == i) "  (verification mismatch)" else ""}", body)
+            val status = when {
+                !s.isStudent -> if (result?.mismatchAt == i) "  (verification mismatch)" else ""
+                s.status == "ok" -> "  [correct]"
+                s.status == "unparseable" -> "  [could not be read]"
+                else -> "  [wrong]"
+            }
+            text("${i + 1}. ${s.rule}$status", body)
             latex(s.afterLatex, 18f)
-            if (s.isStudent && s.note.isNotBlank()) text("   ${s.note}", body)
+            if (s.isStudent && s.note.isNotBlank()) text("   ${s.note.replace("$", "")}", body)
         }
         if (ours.isNotEmpty()) {
             y += 8
@@ -93,12 +120,22 @@ object PdfExporter {
             ours.forEachIndexed { i, s -> text("${i + 1}. ${s.rule}", body); latex(s.afterLatex, 18f) }
         }
         y += 8
-        text("Answer" + when {
-            result?.verified == true -> " (verified)"
-            result?.verdict == "incomplete" -> " (almost, not finished)"
-            else -> ""
-        }, title)
-        latex(result?.answerLatex ?: "", 24f)
+        if (own.any { it.isStudent }) {
+            // A student's note: never present an unverified last line as "the answer".
+            when {
+                result?.verified == true -> { text("Answer (verified)", title); latex(result.answerLatex, 24f) }
+                result?.mismatchAt == null -> { text("Your last line (almost, not finished)", title); latex(result?.answerLatex ?: "", 24f) }
+                else -> { text("Your last line (not verified: check step ${result.mismatchAt + 1})", title); latex(result.answerLatex, 24f) }
+            }
+            if (result?.verified != true && ours.isNotEmpty()) {
+                y += 8
+                text("Correct answer", title)
+                latex(state.solutionAnswer.ifBlank { ours.last().afterLatex }, 24f)
+            }
+        } else {
+            text("Answer" + if (result?.verified == true) " (verified)" else "", title)
+            latex(result?.answerLatex ?: "", 24f)
+        }
 
         doc.finishPage(page)
         val dir = File(context.cacheDir, "exports").apply { mkdirs() }

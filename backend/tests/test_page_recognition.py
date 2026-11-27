@@ -207,6 +207,69 @@ def test_notebook_page_live(monkeypatch, tmp_path):
     _assert_five_lines_in_order(page)
 
 
+# --- The three wizard page captures from 2026-11-27 (Pixel 7, same notebook page) -------------
+#
+# Mathpix grouped the page differently each time. In all three, line_data was ONE array block;
+# word_data separated the expressions, sometimes splitting one line into fragments
+# (`\frac{d}{dx}` typed "text" next to `\sin(3x)`; `\lim` next to `\ln(1+x)`).
+
+def _wizard(n):
+    return (json.loads((FIXTURES / f"wizard_page_{n}_lines.json").read_text()),
+            json.loads((FIXTURES / f"wizard_page_{n}_words.json").read_text()),
+            FIXTURES / f"wizard_page_{n}.jpg")
+
+
+def _run_wizard_page(monkeypatch, tmp_path, n):
+    lines, words, image = _wizard(n)
+    monkeypatch.setattr(settings, "STUB_RECOGNITION", False)
+    monkeypatch.setattr(settings, "MATHPIX_APP_ID", "x")
+    monkeypatch.setattr(settings, "MATHPIX_APP_KEY", "y")
+    monkeypatch.setattr(settings, "STORAGE_DIR", tmp_path)
+
+    async def fake_post(self, url, **kwargs):
+        return httpx.Response(200, json=words if kwargs["json"].get("include_word_data") else lines)
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    page = asyncio.run(recognition.recognize_page(image.read_bytes()))
+    ys = [ln.bbox[1] for ln in page.lines]
+    assert ys == sorted(ys)
+    return [ln.latex for ln in page.lines]
+
+
+def test_wizard_page_1_mathpix_fused_two_lines(monkeypatch, tmp_path):
+    """One set of five lines. Mathpix fused e^x/(x+1) into the sum line, so four lines come back
+    (the margin mark it read as `B` is dropped); the wizard asks for the missing one again."""
+    assert len(_wizard(1)[0]["line_data"]) == 1
+    got = _run_wizard_page(monkeypatch, tmp_path, 1)
+    assert got == [r"\int x^{2} d x", r"\frac{d}{d x} \sin (3 x)", r"\sum^{\frac{e^{x}}{x+1}}",
+                   r"\lim _{x \rightarrow 0} \ln (1+x)"]
+
+
+def test_wizard_page_2_fragments_of_a_line_are_rejoined(monkeypatch, tmp_path):
+    r"""The photo starts at the last line of an upper set, then a full set of five. `\lim`, `\ln`
+    and `(1+x)` arrive as three word boxes on one row and are rejoined."""
+    got = _run_wizard_page(monkeypatch, tmp_path, 2)
+    assert got == [r"\lim _{x \rightarrow 0} \ln (1+x)", r"\int x^{2} d x", r"d / d x \sin (3 x)",
+                   r"e^{x} / x+1", r"\sum 1 / n^{2}", r"\lim _{x \rightarrow 0} \ln (1+x)"]
+
+
+def test_wizard_page_3_two_sets_of_five(monkeypatch, tmp_path):
+    r"""Two full sets on the page: ten lines, including a `text`-typed `$\frac{d}{dx}$` fragment."""
+    got = _run_wizard_page(monkeypatch, tmp_path, 3)
+    assert got == [
+        r"\int x^{2} d x", r"\frac{d}{d x} \sin (3 x)", r"e^{x} / x+1", r"\sum \frac{1}{n^{2}}",
+        r"\lim _{x \rightarrow 0} \ln (1+x)",
+        r"\int x^{2} d x", r"d / d x \sin (3 x)", r"e^{x} / x+1", r"\sum 1 / n^{2}",
+        r"\lim _{x \rightarrow 0} \ln (1+x)",
+    ]
+
+
+@pytest.mark.parametrize("n, from_lines", [(1, 4), (2, 6), (3, 9)])
+def test_wizard_pages_single_block_is_split_on_rows(n, from_lines):
+    r"""Even without the word_data retry, the one `\begin{array}` block splits into its rows."""
+    assert len(recognition.parse_line_data(_wizard(n)[0])) == from_lines
+
+
 # --- Formula mode (single problem), the CTC-2 ∫2x dx fixture ---
 
 def test_formula_mode_recognizes_integral_mocked(monkeypatch):

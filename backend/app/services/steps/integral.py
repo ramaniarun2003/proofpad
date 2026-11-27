@@ -142,7 +142,7 @@ def generate(inner: sp.Basic, x: sp.Symbol, limits: tuple | None = None) -> Solu
         value = sp.simplify(final.subs(x, b) - final.subs(x, a))
         sol.steps.append(StepRec(rule="fundamental theorem of calculus",
                                  before=final, after=value,
-                                 note=f"F({sp.latex(b)}) − F({sp.latex(a)})"))
+                                 note=f"$F({sp.latex(b)}) - F({sp.latex(a)})$"))
         sol.answer = value
     else:
         sol.answer = final

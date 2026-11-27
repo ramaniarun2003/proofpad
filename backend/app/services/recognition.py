@@ -70,6 +70,9 @@ async def recognize(image_bytes: bytes, content_type: str = "image/jpeg") -> Rec
     data = r.json()
     if "error" in data:
         raise RecognitionError(str(data["error"]))
+    # Keep the raw response and the upload for every capture, like page mode does.
+    ts = time.strftime("%Y%m%d_%H%M%S") + f"_{int(time.time() * 1000) % 1000:03d}"
+    _save_page_debug(ts, "formula_mathpix", data, "line_data", image_bytes, upload_name="formula_upload")
     latex = data.get("latex_styled") or _strip_delims(data.get("text", ""))
     return RecognitionResult(latex=latex, confidence=float(data.get("confidence", 0.0)), raw=data,
                              lines=parse_line_data(data))
@@ -298,7 +301,7 @@ async def recognize_page(image_bytes: bytes, content_type: str = "image/jpeg") -
     First ask for line_data. When Mathpix collapses the page into a single math block (what it
     does with tightly spaced lines on ruled paper — it even merges neighbouring lines inside the
     block), ask again for word_data, whose boxes follow the individual expressions, and keep
-    whichever reading found more lines.
+    that reading unless it found fewer lines.
     """
     if settings.STUB_RECOGNITION:
         return _stub_page()
@@ -319,7 +322,9 @@ async def recognize_page(image_bytes: bytes, content_type: str = "image/jpeg") -
         else:
             _save_page_debug(ts, "page_mathpix_words", words, "word_data")
             word_lines = parse_entries(words.get("word_data"))
-            if len(word_lines) > len(lines):
+            # On a tie prefer the word boxes: inside one array block Mathpix tends to smear
+            # neighbouring lines into each other (a limit's subscript landing on the sum above it).
+            if len(word_lines) >= len(lines) and word_lines:
                 lines, source = word_lines, "word_data"
 
     log.info("page mathpix: lines=%d (source=%s)", len(lines), source)
@@ -328,14 +333,15 @@ async def recognize_page(image_bytes: bytes, content_type: str = "image/jpeg") -
     return PageResult(lines=lines, raw_text=data.get("text", ""), image_w=img_w, image_h=img_h)
 
 
-def _save_page_debug(ts: str, name: str, data: dict, key: str, image_bytes: bytes | None = None) -> None:
+def _save_page_debug(ts: str, name: str, data: dict, key: str, image_bytes: bytes | None = None,
+                     upload_name: str = "page_upload") -> None:
     """
     Always keep the raw Mathpix page response under files/debug/<ts>_<name>.json (plus the image
     that produced it) and log what came back, so a wrong line count can be traced to Mathpix's
     segmentation vs our splitting. Never fails the request.
     """
     entries = data.get(key) or []
-    log.info("page mathpix: %d %s entries", len(entries), key)
+    log.info("%s: %d %s entries", name, len(entries), key)
     for i, e in enumerate(entries):
         log.info("  [%d] type=%s text=%r", i, e.get("type"), (e.get("text") or "")[:60])
     try:
@@ -343,7 +349,7 @@ def _save_page_debug(ts: str, name: str, data: dict, key: str, image_bytes: byte
         debug_dir.mkdir(parents=True, exist_ok=True)
         (debug_dir / f"{ts}_{name}.json").write_text(json.dumps(data, indent=2))
         if image_bytes is not None:
-            (debug_dir / f"{ts}_page_upload.jpg").write_bytes(image_bytes)
+            (debug_dir / f"{ts}_{upload_name}.jpg").write_bytes(image_bytes)
     except OSError as exc:
         log.warning("could not save page debug files: %s", exc)
 

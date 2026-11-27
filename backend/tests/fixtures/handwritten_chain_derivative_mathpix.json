@@ -1,0 +1,56 @@
+{
+  "request_id": "e3219556-332d-4833-8674-d163f1b4cfd9",
+  "version": "SuperNet-202",
+  "is_printed": false,
+  "is_handwritten": true,
+  "auto_rotate_confidence": 4.632910943769275e-09,
+  "auto_rotate_degrees": 0,
+  "image_height": 974,
+  "image_width": 1600,
+  "parse_status": "parsed",
+  "fallback_count": 0,
+  "page_confidence": {
+    "confidence": 0.814967930316925,
+    "text_confidence": 1,
+    "layout_confidence": 0.814967930316925,
+    "method": "prototype_min_v1"
+  },
+  "confidence": 1,
+  "confidence_rate": 1,
+  "latex_styled": "\\frac{d}{d x}(\\sin (3 x))=3 \\cos (3 x)",
+  "text": "$\\frac{d}{d x}(\\sin (3 x))=3 \\cos (3 x)$",
+  "line_data": [
+    {
+      "type": "math",
+      "cnt": [
+        [
+          94,
+          184
+        ],
+        [
+          1429,
+          184
+        ],
+        [
+          1429,
+          419
+        ],
+        [
+          94,
+          419
+        ]
+      ],
+      "included": true,
+      "conversion_output": true,
+      "is_printed": false,
+      "is_handwritten": true,
+      "id": "f1c7051b98f94619851e5b1a5d18a4c5",
+      "text": "$\\frac{d}{d x}(\\sin (3 x))=3 \\cos (3 x)$",
+      "after_hyphen": false,
+      "confidence": 1,
+      "confidence_rate": 1,
+      "parse_status": "parsed",
+      "layout_score": 0.7465550303459167
+    }
+  ]
+}

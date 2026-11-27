@@ -144,10 +144,11 @@ fun ResultsContent(
         bottomBar = {
             OutlinedButton(
                 onClick = onExport,
-                enabled = !isFlagged,
+                // A flagged generated solution is held back; a student's own checked work can always be exported.
+                enabled = !isFlagged || isStudentChain,
                 modifier = Modifier.weight(1f).height(48.dp),
                 shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(1.5.dp, if (isFlagged) NotepadColors.Held else NotepadColors.Ink),
+                border = BorderStroke(1.5.dp, if (isFlagged && !isStudentChain) NotepadColors.Held else NotepadColors.Ink),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = NotepadColors.Ink,
                     disabledContentColor = NotepadColors.Held,
@@ -217,7 +218,7 @@ fun ResultsContent(
         } else if (isIncomplete) {
             StickyNote(rotationDeg = 1.5f) {
                 Text("almost there", fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp, color = NotepadColors.Muted)
-                Text(
+                NoteText(
                     "Every step is right, but it is " + (steps.lastOrNull()?.note?.ifBlank { null } ?: "not the final answer yet") + ".",
                     fontFamily = NotepadFonts.PatrickHand,
                     fontSize = 17.sp,
@@ -234,12 +235,14 @@ fun ResultsContent(
             val s = steps[selected!!]
             StickyNote(rotationDeg = 1.5f) {
                 Text("why step ${selected!! + 1}", fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp, color = NotepadColors.Muted)
-                Text(
-                    s.note.ifBlank { "No extra explanation for this step." } + "  Tap a step to hide this.",
+                // Notes are sentences with $…$ math spans; typeset those instead of showing raw LaTeX.
+                NoteText(
+                    s.note.ifBlank { "No extra explanation for this step." },
                     fontFamily = NotepadFonts.PatrickHand,
                     fontSize = 17.sp,
                     color = NotepadColors.NoteInkYellow,
                 )
+                Text("tap a step to hide this", fontFamily = NotepadFonts.PatrickHand, fontSize = 13.sp, color = NotepadColors.Muted)
             }
         }
 
@@ -361,7 +364,7 @@ fun ResultsContent(
 private fun VerifierNote(message: String, resolveFromStep: Int?) {
     StickyNote(background = NotepadColors.StickyPink, rotationDeg = -1.5f) {
         Text("verifier says", fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp, color = NotepadColors.NoteInkPink)
-        Text(message, fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.NoteInkPink)
+        NoteText(message, fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.NoteInkPink)
         // The two chips are visual only; a student-chain note (resolveFromStep == null) leaves them out.
         if (resolveFromStep != null) {
             Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

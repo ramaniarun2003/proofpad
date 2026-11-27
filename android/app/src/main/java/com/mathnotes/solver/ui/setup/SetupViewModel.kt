@@ -115,14 +115,20 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
                 val crops = withContext(Dispatchers.Default) { cropBboxThumbnails(page, resp) }
+                // Pair each expected line with the line the page read actually has for it, so the row
+                // marked "not found" is the one that is really missing (not always the last), and a
+                // second set of lines on the page does not shift everything.
+                val slots = SetupMatching.align(_state.value.lines.map { it.expectedLatex }, resp.lines.map { it.latex })
+                Timber.i("setup page: %d lines from the backend → slots %s (null = retake that line)", resp.lines.size, slots)
                 _state.update { s ->
                     s.copy(
                         busy = false, status = "", pageImagePath = page.absolutePath,
                         lines = s.lines.mapIndexed { i, line ->
-                            val read = resp.lines.getOrNull(i)
+                            val at = slots.getOrNull(i)
+                            val read = at?.let { resp.lines.getOrNull(it) }
                             if (read != null) line.copy(
                                 recognizedLatex = read.latex, correctedLatex = null,
-                                cropPath = crops.getOrNull(i), confidence = read.confidence.toFloat(), notFound = false,
+                                cropPath = crops.getOrNull(at), confidence = read.confidence.toFloat(), notFound = false,
                             ) else line.copy(
                                 recognizedLatex = "", correctedLatex = null, cropPath = null, confidence = 0f, notFound = true,
                             )

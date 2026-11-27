@@ -198,3 +198,53 @@ def test_wrong_student_step_is_flagged(capture, bad_at):
     got = identify(capture)
     res = _verify(got.problem_latex, got.steps)
     assert res["verified"] is False and res["mismatch_at"] == bad_at
+
+
+# --- Regression guard for the demo: today's real handwritten captures (Pixel 7, 2026-11-27) ---
+#
+# The photos are the app's own uploads and the JSON is exactly what Mathpix returned for them.
+
+import json
+import pathlib
+
+FIXTURES = pathlib.Path(__file__).parent / "fixtures"
+
+
+def _recognize_fixture(monkeypatch, tmp_path, name):
+    saved = json.loads((FIXTURES / f"{name}_mathpix.json").read_text())
+    monkeypatch.setattr(settings, "STORAGE_DIR", tmp_path)
+    _mathpix(monkeypatch, saved)
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    image = (FIXTURES / f"{name}.jpg").read_bytes()
+    r = TestClient(app).post("/recognize", files={"image": (f"{name}.jpg", image, "image/jpeg")})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_handwritten_derivative_chain_splits_into_problem_and_step(monkeypatch, tmp_path):
+    """Handwritten `d/dx (sin(3x)) = 3cos(3x)` on ruled paper."""
+    body = _recognize_fixture(monkeypatch, tmp_path, "handwritten_chain_derivative")
+    assert body["latex"] == r"\frac{d}{d x}(\sin (3 x))=3 \cos (3 x)"
+    assert body["problem_latex"] == r"\frac{d}{d x}(\sin (3 x))"
+    assert body["steps"] == [r"3 \cos (3 x)"]
+    assert body["topic_guess"] == "derivative"
+    assert body["split_uncertain"] is False
+    assert [s["line"] for s in body["segments"]] == [0, 0]
+    assert all(s["bbox"] == [94, 184, 1429, 419] for s in body["segments"])
+    # …and the student's step checks out against the problem.
+    assert _verify(body["problem_latex"], body["steps"])["verified"] is True
+    # The raw response is kept for formula captures too.
+    saved = sorted(f.name.split("_", 3)[3] for f in (tmp_path / "debug").iterdir())
+    assert saved == ["formula_mathpix.json", "formula_upload.jpg"]
+
+
+def test_handwritten_integral_without_working_has_no_steps(monkeypatch, tmp_path):
+    """Handwritten `∫ x² dx` alone: the whole capture is the problem."""
+    body = _recognize_fixture(monkeypatch, tmp_path, "handwritten_chain_integral")
+    assert body["problem_latex"] == r"\int x^{2} d x"
+    assert body["steps"] == []
+    assert body["topic_guess"] == "integral"
+    assert body["split_uncertain"] is False

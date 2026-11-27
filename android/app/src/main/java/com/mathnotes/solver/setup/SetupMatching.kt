@@ -52,6 +52,53 @@ object SetupMatching {
     private fun sameToken(a: String, b: String): Boolean = fold(a) == fold(b)
     private fun fold(t: String): String = if (t == "\\cdot" || t == "\\times") "*" else t
 
+    /** 0..1: how alike two lines are, by shared tokens (order-insensitive, multiset). */
+    fun similarity(expected: String, recognized: String): Double {
+        val e = tokens(expected).map(::fold)
+        val r = tokens(recognized).map(::fold)
+        if (e.isEmpty() || r.isEmpty()) return 0.0
+        val pool = e.toMutableList()
+        var shared = 0
+        for (t in r) if (pool.remove(t)) shared++
+        return 2.0 * shared / (e.size + r.size)
+    }
+
+    /**
+     * Which recognized line belongs to which expected line. Both lists are top to bottom, so the
+     * pairing keeps that order; it uses as many pairs as possible and, among those, the pairing
+     * with the highest total [similarity]. Returns, per expected line, the index of its recognized
+     * line or null when the page read has no line for it (the one to retake). Extra recognized
+     * lines (a second set of lines on the page, a stray mark) are left out.
+     */
+    fun align(expected: List<String>, recognized: List<String>): List<Int?> {
+        val n = expected.size
+        val m = recognized.size
+        val pairs = minOf(n, m)
+        // From (i, j) onward: the most pairs possible, and the best total similarity among those.
+        val count = Array(n + 1) { IntArray(m + 1) }
+        val total = Array(n + 1) { DoubleArray(m + 1) }
+        val take = Array(n + 1) { BooleanArray(m + 1) }
+        fun better(c1: Int, t1: Double, c2: Int, t2: Double) = c1 > c2 || (c1 == c2 && t1 > t2 + 1e-9)
+        for (i in n - 1 downTo 0) for (j in m - 1 downTo 0) {
+            // Skip an expected line, skip a recognized line, or pair them.
+            var c = count[i + 1][j]; var t = total[i + 1][j]; var tk = false
+            if (better(count[i][j + 1], total[i][j + 1], c, t)) { c = count[i][j + 1]; t = total[i][j + 1] }
+            val pc = count[i + 1][j + 1] + 1
+            val pt = total[i + 1][j + 1] + similarity(expected[i], recognized[j])
+            if (better(pc, pt, c, t) || (pc == c && kotlin.math.abs(pt - t) <= 1e-9)) { c = pc; t = pt; tk = true }
+            count[i][j] = c; total[i][j] = t; take[i][j] = tk
+        }
+        val out = MutableList<Int?>(n) { null }
+        var i = 0; var j = 0
+        while (i < n && j < m) {
+            if (take[i][j]) { out[i] = j; i++; j++ }
+            else if (count[i + 1][j] == count[i][j] && kotlin.math.abs(total[i + 1][j] - total[i][j]) <= 1e-9) i++
+            else j++
+        }
+        check(out.count { it != null } <= pairs)
+        return out
+    }
+
     /** The first recognized token that differs from the expected chain, or null if they align. */
     fun firstDiffToken(expected: String, recognized: String): String? {
         val e = tokens(expected)

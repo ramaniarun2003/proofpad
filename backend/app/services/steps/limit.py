@@ -1,6 +1,8 @@
 """Limit steps: apply rules in a fixed order, stop at the first that resolves
 the (sub)limit, then recurse on the rewritten limit until a value remains.
 
+Notes are plain sentences with any math wrapped in ``$…$``; the app typesets those spans.
+
 Every step's ``before``/``after`` are *equal limits* (or a limit and its value):
 ``steps[i].after == steps[i+1].before``, and every ``after`` evaluated with
 ``.doit()`` equals the true limit — so the verifier can check each step
@@ -105,10 +107,10 @@ def _standard(f, var, point):
     if point != 0:
         return None
     forms = [
-        (sp.sin(var) / var, sp.Integer(1), "memorized limit: sin x / x → 1 as x → 0"),
-        ((1 - sp.cos(var)) / var, sp.Integer(0), "memorized limit: (1 − cos x) / x → 0 as x → 0"),
-        ((sp.exp(var) - 1) / var, sp.Integer(1), "memorized limit: (eˣ − 1) / x → 1 as x → 0"),
-        (sp.log(1 + var) / var, sp.Integer(1), "memorized limit: ln(1 + x) / x → 1 as x → 0"),
+        (sp.sin(var) / var, sp.Integer(1), r"memorized limit: $\lim_{x \to 0} \frac{\sin x}{x} = 1$"),
+        ((1 - sp.cos(var)) / var, sp.Integer(0), r"memorized limit: $\lim_{x \to 0} \frac{1 - \cos x}{x} = 0$"),
+        ((sp.exp(var) - 1) / var, sp.Integer(1), r"memorized limit: $\lim_{x \to 0} \frac{e^{x} - 1}{x} = 1$"),
+        (sp.log(1 + var) / var, sp.Integer(1), r"memorized limit: $\lim_{x \to 0} \frac{\ln(1+x)}{x} = 1$"),
     ]
     for form, val, note in forms:
         try:
@@ -157,7 +159,7 @@ def generate(inner: sp.Basic, var: sp.Symbol, point, direction: str = "+-") -> S
     if direction == "+-":
         left, right = _side(inner, var, point, "-"), _side(inner, var, point, "+")
         if left is not None and right is not None and left != right:
-            note = (f"left-hand limit = {sp.latex(left)}, right-hand limit = {sp.latex(right)}; "
+            note = (f"left-hand limit = ${sp.latex(left)}$, right-hand limit = ${sp.latex(right)}$; "
                     "they disagree, so the two-sided limit does not exist")
             sol.steps.append(StepRec("one-sided limits", L0, L0, note=note, verdict=DNE))
             sol.verdict = DNE
@@ -174,7 +176,7 @@ def generate(inner: sp.Basic, var: sp.Symbol, point, direction: str = "+-") -> S
             if val is not None:
                 sol.steps.append(StepRec(
                     "direct substitution", cur, val,
-                    note=f"substitute {sp.latex(var)} = {sp.latex(point)}; the expression is defined and equals {sp.latex(val)}"))
+                    note=f"substitute ${sp.latex(var)} = {sp.latex(point)}$; the expression is defined and equals ${sp.latex(val)}$"))
                 sol.answer = val
                 return sol
 
@@ -183,7 +185,7 @@ def generate(inner: sp.Basic, var: sp.Symbol, point, direction: str = "+-") -> S
         if fc is not None:
             sol.steps.append(StepRec(
                 "factor and cancel", cur, _lim(fc, var, point, direction),
-                note=f"both parts are 0 at {sp.latex(var)} = {sp.latex(point)}; factor and cancel the common term"))
+                note=f"both parts are 0 at ${sp.latex(var)} = {sp.latex(point)}$; factor and cancel the common term"))
             expr = fc
             continue
 
@@ -213,11 +215,11 @@ def generate(inner: sp.Basic, var: sp.Symbol, point, direction: str = "+-") -> S
                 divided, k = dv
                 sol.steps.append(StepRec(
                     "divide by the highest power", cur, _lim(divided, var, point, direction),
-                    note=f"divide top and bottom by {sp.latex(var**k)}"))
+                    note=f"divide top and bottom by ${sp.latex(var**k)}$"))
                 val = sp.limit(expr, var, point, direction)
                 sol.steps.append(StepRec(
                     "evaluate at infinity", _lim(divided, var, point, direction), val,
-                    note=f"every 1/{sp.latex(var)}ⁿ term goes to 0, leaving {sp.latex(val)}"))
+                    note=f"every $\\frac{{1}}{{{sp.latex(var)}^n}}$ term goes to 0, leaving ${sp.latex(val)}$"))
                 sol.answer = val
                 return sol
 

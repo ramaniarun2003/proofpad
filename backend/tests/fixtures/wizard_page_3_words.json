@@ -1,0 +1,389 @@
+{
+  "request_id": "7289709f-047a-4802-bf2c-1b8aeb801829",
+  "version": "SuperNet-202",
+  "is_printed": true,
+  "is_handwritten": false,
+  "auto_rotate_confidence": 3.222399058699921e-08,
+  "auto_rotate_degrees": 0,
+  "image_height": 2000,
+  "image_width": 1506,
+  "page_confidence": {
+    "confidence": null,
+    "text_confidence": 0.2278223485923263,
+    "layout_confidence": null,
+    "method": "prototype_min_v1"
+  },
+  "word_data": [
+    {
+      "type": "header",
+      "cnt": [
+        [
+          378,
+          186
+        ],
+        [
+          422,
+          186
+        ],
+        [
+          422,
+          222
+        ],
+        [
+          378,
+          222
+        ]
+      ],
+      "text": "FI",
+      "confidence": 0.2278223485923263,
+      "confidence_rate": 0.8095208639136278
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          544,
+          356
+        ],
+        [
+          740,
+          356
+        ],
+        [
+          740,
+          438
+        ],
+        [
+          544,
+          438
+        ]
+      ],
+      "text": "$\\int x^{2} d x$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "\\int x^{2} d x"
+    },
+    {
+      "type": "header",
+      "cnt": [
+        [
+          441,
+          514
+        ],
+        [
+          463,
+          514
+        ],
+        [
+          463,
+          536
+        ],
+        [
+          441,
+          536
+        ]
+      ],
+      "text": "\u2022",
+      "confidence": 0.26553587600704986,
+      "confidence_rate": 0.8017159692713316
+    },
+    {
+      "type": "text",
+      "cnt": [
+        [
+          525,
+          483
+        ],
+        [
+          601,
+          483
+        ],
+        [
+          601,
+          573
+        ],
+        [
+          525,
+          573
+        ]
+      ],
+      "text": "$\\frac{d}{d x}$",
+      "confidence": 1,
+      "confidence_rate": 1
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          612,
+          498
+        ],
+        [
+          814,
+          498
+        ],
+        [
+          814,
+          558
+        ],
+        [
+          612,
+          558
+        ]
+      ],
+      "text": "$\\sin (3 x)$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "\\sin (3 x)"
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          594,
+          563
+        ],
+        [
+          746,
+          563
+        ],
+        [
+          746,
+          645
+        ],
+        [
+          594,
+          645
+        ]
+      ],
+      "text": "$e^{x} / x+1$",
+      "confidence": 0.9990234375,
+      "confidence_rate": 0.9999248459282221,
+      "latex": "e^{x} / x+1"
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          500,
+          640
+        ],
+        [
+          670,
+          640
+        ],
+        [
+          670,
+          738
+        ],
+        [
+          500,
+          738
+        ]
+      ],
+      "text": "$\\sum \\frac{1}{n^{2}}$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "\\sum \\frac{1}{n^{2}}"
+    },
+    {
+      "type": "header",
+      "cnt": [
+        [
+          436,
+          753
+        ],
+        [
+          462,
+          753
+        ],
+        [
+          462,
+          783
+        ],
+        [
+          436,
+          783
+        ]
+      ],
+      "text": "D",
+      "confidence": 0.4811105062253773,
+      "confidence_rate": 0.8851987802307332
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          509,
+          738
+        ],
+        [
+          683,
+          738
+        ],
+        [
+          683,
+          820
+        ],
+        [
+          509,
+          820
+        ]
+      ],
+      "text": "$\\lim _{x \\rightarrow 0}$",
+      "confidence": 0.82470703125,
+      "confidence_rate": 0.9880268140908544,
+      "latex": "\\lim _{x \\rightarrow 0}"
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          636,
+          725
+        ],
+        [
+          910,
+          725
+        ],
+        [
+          910,
+          815
+        ],
+        [
+          636,
+          815
+        ]
+      ],
+      "text": "$\\ln (1+x)$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "\\ln (1+x)"
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          549,
+          1080
+        ],
+        [
+          547,
+          1004
+        ],
+        [
+          735,
+          1000
+        ],
+        [
+          737,
+          1076
+        ]
+      ],
+      "text": "$\\int x^{2} d x$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "\\int x^{2} d x"
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          554,
+          1092
+        ],
+        [
+          906,
+          1092
+        ],
+        [
+          906,
+          1168
+        ],
+        [
+          554,
+          1168
+        ]
+      ],
+      "text": "$d / d x \\sin (3 x)$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "d / d x \\sin (3 x)"
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          570,
+          1190
+        ],
+        [
+          748,
+          1190
+        ],
+        [
+          748,
+          1266
+        ],
+        [
+          570,
+          1266
+        ]
+      ],
+      "text": "$e^{x} / x+1$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "e^{x} / x+1"
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          542,
+          1282
+        ],
+        [
+          764,
+          1282
+        ],
+        [
+          764,
+          1364
+        ],
+        [
+          542,
+          1364
+        ]
+      ],
+      "text": "$\\sum 1 / n^{2}$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "\\sum 1 / n^{2}"
+    },
+    {
+      "type": "math",
+      "cnt": [
+        [
+          508,
+          1493
+        ],
+        [
+          506,
+          1387
+        ],
+        [
+          940,
+          1377
+        ],
+        [
+          942,
+          1483
+        ]
+      ],
+      "text": "$\\lim _{x \\rightarrow 0} \\ln (1+x)$",
+      "confidence": 1,
+      "confidence_rate": 1,
+      "latex": "\\lim _{x \\rightarrow 0} \\ln (1+x)"
+    }
+  ]
+}
