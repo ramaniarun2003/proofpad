@@ -67,8 +67,6 @@ def verify_endpoint(req: VerifyRequest, db: Session = Depends(get_db)):
     topic = parsed.topic if req.topic in (Topic.unknown, None) else req.topic
     if topic == Topic.series:
         raise HTTPException(422, "edited series steps cannot be re-verified; re-run /solve")
-    if topic == Topic.limit:
-        raise HTTPException(422, "edited limit steps cannot be re-verified; re-run /solve")
     vr = verify_latex_steps(
         parsed,
         topic,

@@ -72,7 +72,11 @@ class SolverRepository(context: Context) {
                 )
             )
         }
-        RecognizeResult(resp.copy(latex = corrected), rawLatex = resp.latex)
+        // The per-user corrections apply to the split pieces too, so Review shows them corrected.
+        val problem = correctLatex(resp.problemLatex.ifBlank { resp.latex }, resp.confidence)
+        val steps = resp.steps.map { correctLatex(it, resp.confidence) }
+        Timber.i("recognize split: problem=%s | steps=%s | uncertain=%s", problem, steps, resp.splitUncertain)
+        RecognizeResult(resp.copy(latex = corrected, problemLatex = problem, steps = steps), rawLatex = resp.latex)
     }
 
     /** Upload a whole page (mode=page): per-line LaTeX + pixel bboxes. Never persisted to History. */

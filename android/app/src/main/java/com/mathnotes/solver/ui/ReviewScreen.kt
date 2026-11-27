@@ -20,6 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +35,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +45,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -146,6 +153,19 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
                     ),
                     minLines = 1,
                 )
+                if (state.splitAtEquals) {
+                    NotepadLabel("I split this at the = sign; drag a step up into the problem if I got it wrong", fontSize = 14)
+                }
+                if (state.splitUncertain) {
+                    StickyNote(Modifier.fillMaxWidth(0.92f), rotationDeg = -1f) {
+                        Text(
+                            "I could not tell the problem from your work, check the split",
+                            fontFamily = NotepadFonts.PatrickHand,
+                            fontSize = 15.sp,
+                            color = NotepadColors.NoteInkYellow,
+                        )
+                    }
+                }
 
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     LATEX_TOKENS.forEach { tok ->
@@ -170,16 +190,26 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
                             placeholder = { Text("Step ${index + 1} LaTeX") },
                             textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = NotepadColors.Ink),
                             shape = RoundedCornerShape(8.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = NotepadColors.Ink,
+                                unfocusedBorderColor = NotepadColors.ChipBorder,
+                                cursorColor = NotepadColors.Ink,
+                            ),
                             minLines = 1,
                         )
-                        if (state.userSteps.size > 1) {
-                            OutlinedButton(onClick = { vm.removeUserStep(index) }) { Text("X") }
-                        }
+                        StepOverflowMenu(
+                            onMerge = { vm.mergeStepIntoProblem(index) },
+                            onRemove = { vm.removeUserStep(index) },
+                        )
                     }
                 }
-                Button(onClick = vm::addUserStep, modifier = Modifier.fillMaxWidth()) {
-                    Text("+ Add Step")
-                }
+                OutlinedButton(
+                    onClick = vm::addUserStep,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, NotepadColors.ChipBorder),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+                ) { Text("+ Add Step", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
 
                 // Per-user correction suggestions (SUGGEST rules) — one-tap swap.
                 state.suggestions.forEach { s ->
@@ -220,11 +250,36 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
 
             Button(
                 onClick = vm::verify,
-                enabled = state.latex.isNotBlank() && state.userSteps.any { it.isNotBlank() },
+                enabled = state.latex.isNotBlank(),
                 modifier = Modifier.weight(1.4f).height(48.dp),
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),
-            ) { Text("Check my steps", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
+            ) { Text(if (state.userSteps.any { it.isNotBlank() }) "Check my steps" else "Solve it", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
+        }
+    }
+}
+
+/** Per-step ⋮ menu: fold the step back into the problem (undo a wrong split) or delete it. */
+@Composable
+private fun StepOverflowMenu(onMerge: () -> Unit, onRemove: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { open = true }
+                .semantics { contentDescription = "Step options" }
+                .padding(horizontal = 10.dp, vertical = 12.dp),
+        ) { Text("⋮", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = NotepadColors.Ink) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text("Merge into problem", fontFamily = NotepadFonts.Inter) },
+                onClick = { open = false; onMerge() },
+            )
+            DropdownMenuItem(
+                text = { Text("Remove step", fontFamily = NotepadFonts.Inter) },
+                onClick = { open = false; onRemove() },
+            )
         }
     }
 }

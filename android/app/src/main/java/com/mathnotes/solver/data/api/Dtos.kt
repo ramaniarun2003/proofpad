@@ -12,6 +12,20 @@ data class RecognizeResponse(
     val confidence: Double,
     @Json(name = "topic_guess") val topicGuess: String,
     @Json(name = "low_confidence") val lowConfidence: Boolean,
+    // Identify split (backend services/identify.py): the problem, then the student's own steps.
+    // `latex` above stays the full recognized string. Defaults keep older backends working.
+    @Json(name = "problem_latex") val problemLatex: String = "",
+    val steps: List<String> = emptyList(),
+    val segments: List<Segment> = emptyList(),
+    @Json(name = "split_uncertain") val splitUncertain: Boolean = false,
+)
+
+/** One piece of the capture after the Identify split: a line, cut at its top-level `=`. */
+@JsonClass(generateAdapter = false)
+data class Segment(
+    val latex: String,
+    val line: Int,
+    val bbox: List<Int>? = null,   // the source line's [x0, y0, x1, y1], when known
 )
 
 @JsonClass(generateAdapter = false)

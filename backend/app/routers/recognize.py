@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import SessionRow, get_db
-from ..models import PageLine, PageRecognizeResponse, RecognizeResponse
-from ..services import recognition
+from ..models import PageLine, PageRecognizeResponse, RecognizeResponse, Segment
+from ..services import identify, recognition
 from ..services.symbolic import guess_topic
 
 router = APIRouter(tags=["recognize"])
@@ -49,6 +49,7 @@ async def recognize(
             raw_text=page.raw_text,
             image_w=page.image_w,
             image_h=page.image_h,
+            **_split_fields(identify.identify([(ln.latex, ln.bbox) for ln in page.lines])),
         )
 
     try:
@@ -56,9 +57,13 @@ async def recognize(
     except recognition.RecognitionError as exc:
         raise HTTPException(503, f"recognition unavailable: {exc}")
 
+    # Identify: prefer Mathpix's per-line reading (with bboxes); fall back to the full string.
+    split = identify.identify([(ln.latex, ln.bbox) for ln in result.lines] if result.lines else result.latex)
+
     row = SessionRow(id=session_id, device_id=device_id, image_path=str(path),
                      recognized_latex=result.latex, confidence=result.confidence)
-    row.log("recognize", confidence=result.confidence, stub=settings.STUB_RECOGNITION)
+    row.log("recognize", confidence=result.confidence, stub=settings.STUB_RECOGNITION,
+            steps=len(split.steps), split_uncertain=split.split_uncertain)
     db.add(row)
     db.commit()
 
@@ -66,6 +71,16 @@ async def recognize(
         session_id=session_id,
         latex=result.latex,
         confidence=result.confidence,
-        topic_guess=guess_topic(result.latex),
+        topic_guess=guess_topic(split.problem_latex),
         low_confidence=result.confidence < settings.LOW_CONFIDENCE,
+        **_split_fields(split),
     )
+
+
+def _split_fields(split: identify.Identified) -> dict:
+    return {
+        "problem_latex": split.problem_latex,
+        "steps": split.steps,
+        "segments": [Segment(latex=s.latex, line=s.line, bbox=s.bbox) for s in split.segments],
+        "split_uncertain": split.split_uncertain,
+    }

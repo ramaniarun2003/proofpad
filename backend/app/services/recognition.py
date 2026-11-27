@@ -25,6 +25,7 @@ class RecognitionResult:
     latex: str
     confidence: float
     raw: dict | None = None
+    lines: list["PageLine"] | None = None  # per-line LaTeX + bbox from line_data (formula mode too)
 
 
 @dataclass
@@ -55,6 +56,8 @@ async def recognize(image_bytes: bytes, content_type: str = "image/jpeg") -> Rec
         "formats": ["latex_styled", "text"],
         "data_options": {"include_latex": True},
         "rm_spaces": True,
+        "include_line_data": True,
+        "math_inline_delimiters": ["$", "$"],
     }
     headers = {"app_id": settings.MATHPIX_APP_ID, "app_key": settings.MATHPIX_APP_KEY}
     try:
@@ -68,7 +71,8 @@ async def recognize(image_bytes: bytes, content_type: str = "image/jpeg") -> Rec
     if "error" in data:
         raise RecognitionError(str(data["error"]))
     latex = data.get("latex_styled") or _strip_delims(data.get("text", ""))
-    return RecognitionResult(latex=latex, confidence=float(data.get("confidence", 0.0)), raw=data)
+    return RecognitionResult(latex=latex, confidence=float(data.get("confidence", 0.0)), raw=data,
+                             lines=parse_line_data(data))
 
 
 def _image_size(image_bytes: bytes) -> tuple[int, int]:
