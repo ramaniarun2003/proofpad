@@ -101,13 +101,14 @@ def _rationalize(f, var, point):
 
 
 def _standard(f, var, point):
-    """The three memorized limits, as x → 0."""
+    """The four memorized limits, as x → 0."""
     if point != 0:
         return None
     forms = [
-        (sp.sin(var) / var, sp.Integer(1), r"standard limit $\lim_{x\to 0}\frac{\sin x}{x} = 1$"),
-        ((1 - sp.cos(var)) / var, sp.Integer(0), r"standard limit $\lim_{x\to 0}\frac{1-\cos x}{x} = 0$"),
-        ((sp.exp(var) - 1) / var, sp.Integer(1), r"standard limit $\lim_{x\to 0}\frac{e^x-1}{x} = 1$"),
+        (sp.sin(var) / var, sp.Integer(1), "memorized limit: sin x / x → 1 as x → 0"),
+        ((1 - sp.cos(var)) / var, sp.Integer(0), "memorized limit: (1 − cos x) / x → 0 as x → 0"),
+        ((sp.exp(var) - 1) / var, sp.Integer(1), "memorized limit: (eˣ − 1) / x → 1 as x → 0"),
+        (sp.log(1 + var) / var, sp.Integer(1), "memorized limit: ln(1 + x) / x → 1 as x → 0"),
     ]
     for form, val, note in forms:
         try:
@@ -195,7 +196,7 @@ def generate(inner: sp.Basic, var: sp.Symbol, point, direction: str = "+-") -> S
             expr = rt
             continue
 
-        # 4. Standard limits (sin x / x, (1 - cos x)/x, (e^x - 1)/x).
+        # 4. Standard limits (sin x / x, (1 - cos x)/x, (e^x - 1)/x, ln(1+x)/x).
         std = _standard(expr, var, point)
         if std is not None:
             val, note = std
@@ -216,7 +217,7 @@ def generate(inner: sp.Basic, var: sp.Symbol, point, direction: str = "+-") -> S
                 val = sp.limit(expr, var, point, direction)
                 sol.steps.append(StepRec(
                     "evaluate at infinity", _lim(divided, var, point, direction), val,
-                    note=f"every $1/{sp.latex(var)}^n \\to 0$, leaving {sp.latex(val)}"))
+                    note=f"every 1/{sp.latex(var)}ⁿ term goes to 0, leaving {sp.latex(val)}"))
                 sol.answer = val
                 return sol
 
