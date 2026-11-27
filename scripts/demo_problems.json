@@ -142,7 +142,7 @@
     "topic": "limit",
     "latex": "\\lim_{x \\to 0} \\frac{\\ln(1 + x)}{x}",
     "expect_rules": [
-      "L'Hopital's rule"
+      "standard limit"
     ]
   },
   {
@@ -159,6 +159,38 @@
     "latex": "\\lim_{x \\to 0} \\frac{\\sqrt{x + 1} - 1}{x}",
     "expect_rules": [
       "rationalize"
+    ]
+  },
+  {
+    "id": "lim7",
+    "topic": "limit",
+    "latex": "\\lim_{x \\to 0} \\frac{x - \\sin x}{x^3}",
+    "expect_rules": [
+      "L'Hopital's rule"
+    ]
+  },
+  {
+    "id": "lim8",
+    "topic": "limit",
+    "latex": "\\lim_{x \\to 0} \\frac{1}{x}",
+    "expect_rules": [
+      "one-sided limits"
+    ]
+  },
+  {
+    "id": "lim9",
+    "topic": "limit",
+    "latex": "\\lim_{x \\to 2} (x^2 + 1)",
+    "expect_rules": [
+      "direct substitution"
+    ]
+  },
+  {
+    "id": "lim10",
+    "topic": "limit",
+    "latex": "\\lim_{x \\to -\\infty} \\frac{2x^3 - x}{x^3 + 1}",
+    "expect_rules": [
+      "divide by the highest power"
     ]
   }
 ]

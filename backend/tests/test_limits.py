@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models import Topic
+import sympy as sp
+
 from app.services import steps as step_service
 from app.services.symbolic import parse
 from app.services.verify import verify
@@ -19,7 +21,10 @@ PROBLEMS = [
     (r"\lim_{x \to 0} \frac{\sin x}{x}", "standard limit", "1"),
     (r"\lim_{x \to 0} \frac{1 - \cos x}{x}", "standard limit", "0"),
     (r"\lim_{x \to 0} \frac{e^x - 1}{x}", "standard limit", "1"),
-    (r"\lim_{x \to 0} \frac{\ln(1 + x)}{x}", "L'Hopital", "1"),       # required case
+    (r"\lim_{x \to 0} \frac{\ln(1 + x)}{x}", "standard limit", "1"),  # required case
+    (r"\lim_{x \to 0} \frac{x - \sin x}{x^3}", "L'Hopital", r"\frac{1}{6}"),   # needs all 3 rounds
+    (r"\lim_{x \to 0} \frac{e^x - 1 - x}{x^2}", "L'Hopital", r"\frac{1}{2}"),
+    (r"\lim_{x \to -\infty} \frac{3x^2 + 1}{x^2 - 5}", "divide by the highest power", "3"),
     (r"\lim_{x \to \infty} \frac{x}{e^x}", "L'Hopital", "0"),
     (r"\lim_{x \to \infty} \frac{3x^2 + 1}{x^2 - 5}", "divide by the highest power", "3"),  # required case
     (r"\lim_{x \to \infty} \frac{2x^3 - x}{x^3 + 1}", "divide by the highest power", "2"),
@@ -90,4 +95,44 @@ def test_limit_solves_over_api():
         assert body["topic"] == "limit"
         assert body["answer_latex"] == "1"
         assert body["verified"] is True
-        assert any("hopital" in s["rule"].lower() for s in body["steps"])
+        assert [s["rule"] for s in body["steps"]] == ["standard limit"]   # ln(1+x)/x is a memorized limit
+
+
+# --- Points the parser must accept: finite, \infty, -\infty, 0^+, 0^- ---
+
+@pytest.mark.parametrize("latex, point, direction", [
+    (r"\lim_{x \to 2} x", sp.Integer(2), "+-"),
+    (r"\lim_{x \to \infty} \frac{1}{x}", sp.oo, None),
+    (r"\lim_{x \to -\infty} \frac{1}{x}", -sp.oo, None),
+    (r"\lim_{x \to 0^+} \frac{1}{x}", sp.Integer(0), "+"),
+    (r"\lim_{x \to 0^-} \frac{1}{x}", sp.Integer(0), "-"),
+    (r"\lim _{x \rightarrow 0^{+}} \frac{1}{x}", sp.Integer(0), "+"),   # as Mathpix writes it
+])
+def test_limit_points_parse(latex, point, direction):
+    p = parse(latex)
+    assert p.topic == Topic.limit
+    assert p.point == point
+    if direction is not None:
+        assert p.direction == direction
+
+
+@pytest.mark.parametrize("latex, answer", [
+    (r"\lim_{x \to 0^+} \frac{1}{x}", r"\infty"),
+    (r"\lim_{x \to 0^-} \frac{1}{x}", r"-\infty"),
+    (r"\lim_{x \to -\infty} \frac{1}{x}", "0"),
+])
+def test_one_sided_and_negative_infinity_limits(latex, answer):
+    p = parse(latex)
+    topic, sol = step_service.solve(p, Topic.unknown)
+    assert sol.answer_latex == answer
+    assert verify(p, topic, sol).verified
+
+
+def test_lhopital_stops_after_three_rounds_and_rechecks_the_form():
+    p = parse(r"\lim_{x \to 0} \frac{x - \sin x}{x^3}")
+    _, sol = step_service.solve(p, Topic.unknown)
+    rules = [s.rule for s in sol.steps]
+    assert rules.count("L'Hopital's rule") == 3
+    assert rules[-1] == "direct substitution"       # the form is no longer 0/0, so substitution finishes it
+    for a, b in zip(sol.steps, sol.steps[1:]):
+        assert a.after == b.before                   # chain invariant
