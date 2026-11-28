@@ -323,7 +323,7 @@ private fun BodyText(text: String, color: androidx.compose.ui.graphics.Color = N
 
 /** Where the backend lives on today's LAN. On the notepad page, like the rest of the app. */
 @Composable
-fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> Unit = {}) {
+fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> Unit = {}, onShowWelcome: () -> Unit = {}) {
     var url by remember { mutableStateOf(vm.savedBackendUrl) }
     var invalidUrl by remember { mutableStateOf(false) }
     var edited by remember { mutableStateOf(false) }
@@ -380,12 +380,12 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> U
             )
 
             SectionHeader("Onboarding")
-            var welcomeReset by remember { mutableStateOf(false) }
+            BodyText("The cover, the three-page guide and handwriting setup show once, on first launch. This starts them again from the cover.")
             OutlinedButton(
-                onClick = { vm.resetWelcome(); welcomeReset = true },
-                modifier = Modifier.fillMaxWidth(),
+                onClick = onShowWelcome,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
-            ) { Text(if (welcomeReset) "Welcome screen will show next launch ✓" else "Show welcome screen again", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
+            ) { Text("Show welcome screen again", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
 
             SectionHeader("Handwriting samples")
             val latest = handwriting.maxByOrNull { it.createdAt }

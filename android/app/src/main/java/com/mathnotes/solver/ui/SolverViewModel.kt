@@ -198,7 +198,8 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
         viewModelScope.launch {
             if (WelcomePrefs.consumeRuleResetNeeded(getApplication())) {
                 handwritingRepo.clear()
-                WelcomePrefs.setSetupComplete(getApplication(), false)
+                // Onboarding is not reopened for this: the cover and guide show once. The samples
+                // can be captured again from Settings "Redo setup".
                 Timber.i("cleared handwriting samples on upgrade (built from the pre-line_data page read)")
             }
         }
@@ -364,8 +365,14 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
     }
 
     /** One-time welcome cover: mark it seen after "Get started", or clear it to re-demo from Settings. */
-    fun markWelcomeSeen() = viewModelScope.launch { WelcomePrefs.setSeen(getApplication(), true) }
-    fun resetWelcome() = viewModelScope.launch { WelcomePrefs.setSeen(getApplication(), false) }
+    /** The user reached Capture from the wizard (finished or skipped): onboarding is done for good. */
+    fun completeOnboarding() = viewModelScope.launch { WelcomePrefs.setOnboardingComplete(getApplication(), true) }
+
+    /** Settings "Show welcome screen again": the only way to see the cover and guide a second time. */
+    fun resetOnboarding(then: () -> Unit) = viewModelScope.launch {
+        WelcomePrefs.setOnboardingComplete(getApplication(), false)
+        then()
+    }
 
     /** Debug toggles exposed on the Settings screen; persisted so they survive restarts. */
     var debugImages: Boolean

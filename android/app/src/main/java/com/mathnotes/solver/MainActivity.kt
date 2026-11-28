@@ -1,5 +1,7 @@
 package com.mathnotes.solver
 
+import com.mathnotes.solver.ui.onboarding.Onboarding
+import com.mathnotes.solver.ui.onboarding.GuideScreen
 import com.mathnotes.solver.ui.UiMessage
 import com.mathnotes.solver.ui.components.NoticeHost
 import androidx.compose.ui.Modifier
@@ -46,8 +48,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Straight to Capture only once the user has seen the cover AND finished (or skipped) setup.
-        val start = if (WelcomePrefs.hasSeenWelcomeBlocking(this) && WelcomePrefs.hasCompletedSetupBlocking(this)) "capture" else "welcome"
+        // One flag for the whole first-launch flow (cover, guide, wizard): done means Capture, full stop.
+        val start = Onboarding.startDestination(WelcomePrefs.hasCompletedOnboardingBlocking(this))
 
         setContent {
             NotepadTheme {
@@ -56,16 +58,23 @@ class MainActivity : ComponentActivity() {
                     val nav = rememberNavController()
                     NavHost(navController = nav, startDestination = start) {
                         composable("welcome") {
-                            WelcomeScreen(onGetStarted = {
-                                vm.markWelcomeSeen()
-                                nav.navigate("setupWrite") { popUpTo("welcome") { inclusive = true } }
-                            })
+                            // The cover stays on the back stack so Back from the guide's first page returns to it.
+                            WelcomeScreen(onGetStarted = { nav.navigate("guide") })
+                        }
+                        // --- The one-time three-page guide ---
+                        composable("guide") {
+                            GuideScreen(
+                                onToCover = { nav.popBackStack("welcome", inclusive = false) },
+                                // Skip on any page, or the last page's button: on to the wizard, leaving
+                                // the cover and the guide behind.
+                                onToSetup = { nav.navigate("setupWrite") { popUpTo("welcome") { inclusive = true } } },
+                            )
                         }
                         // --- Handwriting setup wizard ---
                         composable("setupWrite") {
                             SetupWriteScreen(
                                 onSkip = {
-                                    setupVm.markSetupComplete()
+                                    vm.completeOnboarding()
                                     nav.navigate("capture") { popUpTo("setupWrite") { inclusive = true } }
                                 },
                                 onCapture = { nav.navigate("setupCapture") },
@@ -106,7 +115,7 @@ class MainActivity : ComponentActivity() {
                         }
                         composable("setupDone") {
                             SetupDoneScreen(setupVm, onDone = {
-                                setupVm.markSetupComplete()
+                                vm.completeOnboarding()
                                 nav.navigate("capture") { popUpTo("setupWrite") { inclusive = true } }
                             })
                         }
@@ -165,6 +174,10 @@ class MainActivity : ComponentActivity() {
                                 onRedoSetup = {
                                     setupVm.reset()
                                     nav.navigate("setupWrite") { popUpTo("settings") { inclusive = true } }
+                                },
+                                // Clears the onboarding flag and restarts at the cover, with nothing behind it.
+                                onShowWelcome = {
+                                    vm.resetOnboarding { nav.navigate("welcome") { popUpTo(0) { inclusive = true } } }
                                 },
                             )
                         }

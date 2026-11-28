@@ -225,8 +225,6 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { SetupUiState() }
     }
 
-    /** Onboarding flag: set when the wizard finishes or is skipped; cleared to re-run it. */
-    fun markSetupComplete() = viewModelScope.launch { WelcomePrefs.setSetupComplete(getApplication(), true) }
 
     /** Crop each line's thumbnail straight from its bbox (with 8% padding), clamped to the image. */
     private fun cropBboxThumbnails(page: File, resp: PageRecognizeResponse): List<String?> {

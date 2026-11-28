@@ -1,5 +1,6 @@
 package com.mathnotes.solver.data
 
+import com.mathnotes.solver.ui.onboarding.Onboarding
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -14,34 +15,34 @@ import kotlinx.coroutines.runBlocking
 private val Context.welcomeDataStore by preferencesDataStore(name = "welcome")
 
 /**
- * Persists whether the user has seen the one-time [WelcomeScreen][com.mathnotes.solver.ui.WelcomeScreen].
- * The flag drives the launch destination (welcome vs. capture) and can be cleared from
- * Settings to re-demo the cover.
+ * Persists whether the one-time first-launch flow (cover, guide, handwriting setup) is done. The
+ * flag picks the launch destination and is cleared only from Settings. `has_seen_welcome` and
+ * `has_completed_setup` are the two flags it replaced; they are still read for older installs.
  */
 object WelcomePrefs {
     private val SEEN = booleanPreferencesKey("has_seen_welcome")
     private val SETUP_DONE = booleanPreferencesKey("has_completed_setup")
 
+    private val ONBOARDED = booleanPreferencesKey("has_completed_onboarding")
+
     /**
-     * Read the flags once, blocking. Called from `MainActivity.onCreate` (behind the system
-     * splash) to pick the start destination with no first-frame flicker — a single small
-     * disk read, so the brief block is fine here.
+     * The one flag for the whole first-launch flow (cover, guide, wizard). Read once, blocking,
+     * from `MainActivity.onCreate` behind the system splash. Installs from before this flag
+     * existed are judged by the two older ones, so an update never shows the guide to someone who
+     * had already finished.
      */
-    fun hasSeenWelcomeBlocking(context: Context): Boolean = runBlocking {
-        context.welcomeDataStore.data.map { it[SEEN] ?: false }.first()
+    fun hasCompletedOnboardingBlocking(context: Context): Boolean = runBlocking {
+        context.welcomeDataStore.data.map { Onboarding.hasCompleted(it[ONBOARDED], it[SEEN] ?: false, it[SETUP_DONE] ?: false) }.first()
     }
 
-    fun hasCompletedSetupBlocking(context: Context): Boolean = runBlocking {
-        context.welcomeDataStore.data.map { it[SETUP_DONE] ?: false }.first()
-    }
-
-    suspend fun setSeen(context: Context, seen: Boolean) {
-        context.welcomeDataStore.edit { it[SEEN] = seen }
-    }
-
-    /** Set once the user finishes (or skips) the handwriting setup wizard; cleared to re-run it. */
-    suspend fun setSetupComplete(context: Context, complete: Boolean) {
-        context.welcomeDataStore.edit { it[SETUP_DONE] = complete }
+    /** True when the user reaches Capture from the wizard; false only from Settings "Show welcome screen again". */
+    suspend fun setOnboardingComplete(context: Context, complete: Boolean) {
+        context.welcomeDataStore.edit {
+            it[ONBOARDED] = complete
+            // Keep the older flags in step so a downgrade, or the legacy read above, agrees.
+            it[SEEN] = complete
+            it[SETUP_DONE] = complete
+        }
     }
 
     // The last backend URL that answered a health check.
