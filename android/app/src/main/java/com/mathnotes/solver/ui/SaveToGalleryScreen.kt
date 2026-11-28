@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -100,11 +101,11 @@ fun SaveToGalleryContent(
     initialTags: List<String> = emptyList(),
 ) {
     val density = LocalDensity.current
-    var title by remember { mutableStateOf(initialTitle) }
-    var selectedFolderId by remember { mutableStateOf(initialFolderId) }
-    var difficulty by remember { mutableStateOf(initialDifficulty) }
+    var title by rememberSaveable { mutableStateOf(initialTitle) }
+    var selectedFolderId by rememberSaveable { mutableStateOf(initialFolderId) }
+    var difficulty by rememberSaveable { mutableStateOf(initialDifficulty) }
     var selectedTags by remember { mutableStateOf(initialTags.toSet()) }
-    var keepPhoto by remember { mutableStateOf(true) }
+    var keepPhoto by rememberSaveable { mutableStateOf(true) }
     var showNewFolder by remember { mutableStateOf(false) }
     var showAddTag by remember { mutableStateOf(false) }
     var awaitingNewFolder by remember { mutableStateOf(false) }

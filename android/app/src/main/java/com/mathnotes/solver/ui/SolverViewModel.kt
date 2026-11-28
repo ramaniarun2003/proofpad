@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import androidx.lifecycle.SavedStateHandle
 import com.mathnotes.solver.export.PdfExporter
 import android.app.Application
 import android.content.Context
@@ -94,6 +95,7 @@ data class SolverUiState(
 )
 
 private const val BACKEND_URL_PREF = "backend_url"
+private const val SNAPSHOT_KEY = "solver_state"
 
 /** A photo taken while the backend was unreachable, retried automatically once connected. */
 private data class PendingCapture(val raw: File, val crop: CropSpec?, val topicHint: String)
@@ -126,13 +128,16 @@ data class FolderFilter(
     val difficulty: Difficulty? = null,
 )
 
-class SolverViewModel(app: Application) : AndroidViewModel(app) {
+class SolverViewModel(app: Application, private val saved: SavedStateHandle) : AndroidViewModel(app) {
     private val repo = SolverRepository(app)
     private val galleryRepo = GalleryRepository(app)
     private val handwritingRepo = HandwritingRepository(app)
     private val prefs = app.getSharedPreferences("solver_settings", Context.MODE_PRIVATE)
 
-    private val _state = MutableStateFlow(SolverUiState())
+    // What was on screen when the process was last killed in the background, if anything.
+    private val restored: StateSnapshot? = snapshotFromJson(saved.get<String>(SNAPSHOT_KEY))
+
+    private val _state = MutableStateFlow(restored?.toUiState() ?: SolverUiState())
     val state: StateFlow<SolverUiState> = _state
 
     // --- Backend connection ---
@@ -148,7 +153,19 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
 
     private var pending: PendingCapture? = null
     /** The most recent capture, kept so a failed recognition can be retried from Review. */
-    private var lastCapture: PendingCapture? = null
+    private var lastCapture: PendingCapture? =
+        restored?.lastCapture?.let { PendingCapture(File(it.raw), it.crop, it.topicHint) }
+
+    /**
+     * Keep the saved copy current: Android writes the SavedStateHandle out when the app goes to
+     * the background, and hands it back if it later has to restart the process.
+     */
+    private fun saveSnapshot() {
+        val last = lastCapture?.let { CaptureSnapshot.of(it.raw, it.crop, it.topicHint) }
+        saved[SNAPSHOT_KEY] = _state.value
+            .toSnapshot(last, pendingGalleryFile, _folderFilter.value.folderId, _galleryQuery.value)
+            .toJson()
+    }
 
     init {
         // When the backend comes up and a photo is waiting, recognize it automatically.
@@ -199,7 +216,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     val savedThisWeek: StateFlow<List<SessionEntity>> =
         galleryRepo.savedThisWeek().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val _galleryQuery = MutableStateFlow("")
+    private val _galleryQuery = MutableStateFlow(restored?.galleryQuery.orEmpty())
     val galleryQuery: StateFlow<String> = _galleryQuery
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val searchResults: StateFlow<List<SessionEntity>> =
@@ -210,7 +227,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     fun setGalleryQuery(q: String) { _galleryQuery.value = q }
 
     // --- Folder detail (filtered notes in one folder) ---
-    private val _folderFilter = MutableStateFlow(FolderFilter())
+    private val _folderFilter = MutableStateFlow(FolderFilter(folderId = restored?.folderId ?: -1))
     val folderFilter: StateFlow<FolderFilter> = _folderFilter
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -541,9 +558,9 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** A gallery photo awaiting the adjustable-crop screen (no framing guide for picked images). */
-    var pendingGalleryFile: File? = null
+    var pendingGalleryFile: File? = restored?.pendingGallery?.let(::File)?.takeIf { it.exists() }
         private set
-    fun setPendingGallery(f: File) { pendingGalleryFile = f }
+    fun setPendingGallery(f: File) { pendingGalleryFile = f; saveSnapshot() }
 
     /** Read-only: number of solution steps stored for a cached session (for History). */
     fun stepCount(session: SessionEntity): Int = repo.stepsOf(session).size
@@ -643,4 +660,19 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
             copy(busy = false, status = "", error = failureNote(e))
         }
 
+
+    // Last in the class on purpose: these collectors start at once (viewModelScope runs on
+    // Main.immediate) and read properties declared above, which must already be initialized.
+    init {
+        viewModelScope.launch { _state.collect { saveSnapshot() } }
+        viewModelScope.launch { _folderFilter.collect { saveSnapshot() } }
+        viewModelScope.launch { _galleryQuery.collect { saveSnapshot() } }
+        // A restored problem gets its correction suggestions back (they are not saved).
+        restored?.latex?.takeIf { it.isNotBlank() }?.let { latex ->
+            viewModelScope.launch {
+                val suggestions = repo.suggestionsFor(latex)
+                _state.update { if (it.latex == latex) it.copy(suggestions = suggestions) else it }
+            }
+        }
+    }
 }

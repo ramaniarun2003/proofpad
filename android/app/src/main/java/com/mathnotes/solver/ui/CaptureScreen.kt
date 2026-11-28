@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import androidx.compose.runtime.saveable.rememberSaveable
 import timber.log.Timber
 import android.app.Activity
 import android.content.Context
@@ -212,7 +213,7 @@ fun CaptureScreen(
     // PreviewView pixel size, needed to map the guide box to image coordinates.
     var previewSize by remember { mutableStateOf(IntSize.Zero) }
     // Topic hint chips — the pick overrides the recognizer's guess (see captureAndRecognize).
-    var selectedTopic by remember { mutableStateOf("Auto") }
+    var selectedTopic by rememberSaveable { mutableStateOf("Auto") }
     // Bound camera + torch state, for the flash button.
     var camera by remember { mutableStateOf<Camera?>(null) }
     var torchOn by remember { mutableStateOf(false) }

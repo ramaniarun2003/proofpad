@@ -88,6 +88,8 @@ private val TOPIC_OPTIONS = listOf("Integrate" to "integral", "Differentiate" to
 fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit) {
     val state by vm.state.collectAsState()
     LaunchedEffect(state.result) { if (state.result != null) onSolved() }
+    // Restarted with nothing to restore (an old or unreadable saved state): go back to Capture.
+    LaunchedEffect(Unit) { if (!vm.state.value.hasCapture) onRetake() }
 
     // Recognition failed: the error note below offers Retry and the connection chip + sheet.
     val backendState by vm.backend.collectAsState()

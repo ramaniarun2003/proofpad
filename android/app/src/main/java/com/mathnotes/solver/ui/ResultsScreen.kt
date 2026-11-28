@@ -89,6 +89,8 @@ private fun sympyFn(topic: String): String = when (topic) {
 @Composable
 fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery: () -> Unit, onFixReading: () -> Unit = {}) {
     val state by vm.state.collectAsState()
+    // Restarted with no result to restore: go back to Capture instead of a blank page.
+    LaunchedEffect(Unit) { if (vm.state.value.result == null) onNewProblem() }
     val result = state.result ?: return
     val ctx = LocalContext.current
     val date = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d")) }
