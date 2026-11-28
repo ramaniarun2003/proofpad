@@ -1,5 +1,7 @@
 package com.mathnotes.solver.ui
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import com.mathnotes.solver.data.StorageJanitor
 import androidx.lifecycle.SavedStateHandle
 import com.mathnotes.solver.export.PdfExporter
@@ -148,6 +150,23 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
     private val _captureEvents = MutableSharedFlow<CaptureEvent>(extraBufferCapacity = 4)
     val captureEvents = _captureEvents.asSharedFlow()
     private var saving = false
+    /** The recognition, solve or check in flight, so it can be cancelled. */
+    private var requestJob: Job? = null
+    /** The "Show me the full solution" request in flight. */
+    private var solutionJob: Job? = null
+
+    /**
+     * Stop whatever request is in flight (Cancel, Retake, New problem, the back button). The
+     * network call is aborted and its answer, if one still arrives, is dropped: it can no longer
+     * overwrite the next capture. Everything already on screen stays as it was.
+     */
+    fun cancelRequest() {
+        requestJob?.cancel()
+        requestJob = null
+        solutionJob?.cancel()
+        solutionJob = null
+        _state.update { it.copy(busy = false, status = "", solutionBusy = false) }
+    }
     private val _messages = MutableSharedFlow<UiMessage>(extraBufferCapacity = 8)
     val messages = _messages.asSharedFlow()
     fun notify(message: UiMessage) { _messages.tryEmit(message) }
@@ -400,7 +419,8 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
         }
         val debug = debugImages
         val threshold = useAdaptiveThreshold
-        viewModelScope.launch {
+        requestJob?.cancel()   // a newer capture replaces one still being read
+        requestJob = viewModelScope.launch {
             try {
                 val clean = withContext(Dispatchers.Default) {
                     Preprocessor.process(getApplication(), raw, crop, debug, threshold)
@@ -440,6 +460,8 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
                         rawLatex = recResult.rawLatex,
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e   // cancelled on purpose: not an error to show
             } catch (e: Exception) {
                 // Review is already on screen: say what happened there and offer Retry. The photo
                 // is kept in [lastCapture].
@@ -509,7 +531,7 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
         val chain = s.userSteps.map { it.trim().removePrefix("=").trim() }.filter { it.isNotEmpty() }
         if (chain.isEmpty()) { solve(); return }
         _state.update { it.copy(busy = true, status = "Verifying steps…", error = null, parseError = null) }
-        viewModelScope.launch {
+        requestJob = viewModelScope.launch {
             try {
                 Timber.i("verify: problem=%s | steps=%s", s.latex, chain)
                 val check = repo.verify(s.sessionId, s.latex, s.topic, chain)
@@ -554,6 +576,8 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
                     it.copy(busy = false, status = "", topic = topic, result = solveResp,
                         solutionAnswer = ours.lastOrNull()?.afterLatex ?: "")
                 }
+            } catch (e: CancellationException) {
+                throw e   // cancelled on purpose: not an error to show
             } catch (e: Exception) {
                 _state.update { it.failed(e) }
             }
@@ -569,13 +593,15 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
         val current = s.result ?: return
         if (current.steps.any { it.isSolution } || s.solutionBusy) return
         _state.update { it.copy(solutionBusy = true, error = null) }
-        viewModelScope.launch {
+        solutionJob = viewModelScope.launch {
             try {
                 val solved = repo.solveOnly(s.sessionId, s.latex, s.topic)
                 val ours = solved.steps.map { it.copy(source = Step.SOURCE_SOLUTION) }
                 val all = current.steps + ours
                 repo.saveVerification(s.sessionId, s.latex, s.topic, all, current.verified, current.mismatchAt)
                 _state.update { it.copy(solutionBusy = false, result = current.copy(steps = all), solutionAnswer = solved.answerLatex) }
+            } catch (e: CancellationException) {
+                throw e   // cancelled on purpose: not an error to show
             } catch (e: Exception) {
                 Timber.w(e, "full solution failed")
                 _state.update { it.copy(solutionBusy = false) }
@@ -607,10 +633,12 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
         val s = _state.value
         if (s.busy) return   // a second tap while the first request is in flight
         _state.update { it.copy(busy = true, status = "Solving…", error = null, parseError = null) }
-        viewModelScope.launch {
+        requestJob = viewModelScope.launch {
             try {
                 val resp = repo.solve(s.sessionId, s.latex, s.topic)
                 _state.update { it.copy(busy = false, status = "", sessionId = resp.sessionId, topic = resp.topic, result = resp) }
+            } catch (e: CancellationException) {
+                throw e   // cancelled on purpose: not an error to show
             } catch (e: Exception) {
                 _state.update { it.failed(e) }
             }
@@ -664,7 +692,10 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
     fun dismissExportError() = _state.update { it.copy(exportFailed = false) }
 
     /** An unsolved note's "Fix the reading": take it back to Review, editable, with nothing solved. */
-    fun reviewUnsolved() = _state.update { it.copy(result = null, error = null, parseError = null, busy = false, status = "") }
+    fun reviewUnsolved() {
+        cancelRequest()
+        _state.update { it.copy(result = null, error = null, parseError = null, busy = false, status = "") }
+    }
 
     /** Set the current note's difficulty (from the Results stars); persists it on the session. */
     fun setDifficulty(difficulty: Difficulty?) {
@@ -674,7 +705,10 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
         viewModelScope.launch { repo.setDifficulty(sessionId, difficulty) }
     }
 
-    fun reset() = _state.update { SolverUiState() }
+    fun reset() {
+        cancelRequest()
+        _state.update { SolverUiState() }
+    }
 
     /** Solve / Check failed on Review. A 422 is a parse failure: the yellow note, not the raw error body. */
     private fun SolverUiState.failed(e: Exception): SolverUiState =

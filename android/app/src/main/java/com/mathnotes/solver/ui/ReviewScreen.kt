@@ -1,5 +1,7 @@
 package com.mathnotes.solver.ui
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -90,6 +92,8 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
     LaunchedEffect(state.result) { if (state.result != null) onSolved() }
     // Restarted with nothing to restore (an old or unreadable saved state): go back to Capture.
     LaunchedEffect(Unit) { if (!vm.state.value.hasCapture) onRetake() }
+    // Leaving with the back button while something is in flight cancels it, like Retake does.
+    BackHandler(enabled = state.busy) { vm.cancelRequest(); onRetake() }
 
     // Recognition failed: the error note below offers Retry and the connection chip + sheet.
     val backendState by vm.backend.collectAsState()
@@ -153,6 +157,16 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
                     CircularProgressIndicator(color = NotepadColors.Ink)
                     NotepadLabel(state.status, fontSize = 16)
                 }
+                // Reading the photo: Cancel goes back to the camera. Solving or checking: Cancel
+                // stays here with the reading and the steps as they were.
+                val reading = state.latex.isBlank()
+                OutlinedButton(
+                    onClick = { vm.cancelRequest(); if (reading) onRetake() },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.5.dp, NotepadColors.Ink),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+                ) { Text("Cancel", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
                 return@Column
             }
 
@@ -321,7 +335,7 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
 
         NotepadBottomBar {
             OutlinedButton(
-                onClick = onRetake,
+                onClick = { vm.cancelRequest(); onRetake() },
                 modifier = Modifier.weight(1f).height(48.dp),
                 shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.5.dp, NotepadColors.Ink),

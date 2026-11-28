@@ -113,6 +113,7 @@ fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery
             // Never the server's text: a plain sentence for a reading that will not parse, or the mapped error.
             problem = state.parseError ?: state.error,
             onSolve = vm::solve,
+            onCancel = vm::cancelRequest,
             onFixReading = { vm.reviewUnsolved(); onFixReading() },
             onNewProblem = { vm.reset(); onNewProblem() },
         )
@@ -131,7 +132,7 @@ fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery
         verdict = result.verdict,
         solutionAnswerLatex = state.solutionAnswer,
         solutionBusy = state.solutionBusy,
-        onShowSolution = vm::showFullSolution,
+        onShowSolution = { if (state.solutionBusy) vm.cancelRequest() else vm.showFullSolution() },
         difficulty = state.difficulty,
         onRate = vm::setDifficulty,
         onExport = vm::exportPdf,
@@ -156,6 +157,7 @@ fun UnsolvedContent(
     onSolve: () -> Unit,
     onFixReading: () -> Unit,
     onNewProblem: () -> Unit,
+    onCancel: () -> Unit = {},
 ) {
     val density = LocalDensity.current
     NotepadPage(
@@ -163,13 +165,12 @@ fun UnsolvedContent(
         caption = "$dateLabel · $topic",
         bottomBar = {
             OutlinedButton(
-                onClick = onFixReading,
-                enabled = !busy,
+                onClick = if (busy) onCancel else onFixReading,
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                 shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.5.dp, NotepadColors.Ink),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
-            ) { Text("Fix the reading", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
+            ) { Text(if (busy) "Cancel" else "Fix the reading", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
             Button(
                 onClick = onSolve,
                 enabled = !busy && problemLatex.isNotBlank(),
@@ -409,15 +410,14 @@ fun ResultsContent(
         if (isStudentChain && onShowSolution != null && solutionSteps.isEmpty()) {
             Spacer(Modifier.height(14.dp))
             OutlinedButton(
-                onClick = onShowSolution,
-                enabled = !solutionBusy,
+                onClick = onShowSolution,   // while it is solving, the same button cancels
                 modifier = Modifier.fillMaxWidth().height(44.dp),
                 shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.dp, NotepadColors.ChipBorder),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
             ) {
                 Text(
-                    if (solutionBusy) "Solving…" else "Show me the full solution",
+                    if (solutionBusy) "Solving…  tap to cancel" else "Show me the full solution",
                     fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Ink,
                 )
             }

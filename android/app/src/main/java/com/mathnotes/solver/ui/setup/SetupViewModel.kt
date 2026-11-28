@@ -1,5 +1,7 @@
 package com.mathnotes.solver.ui.setup
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import com.mathnotes.solver.ui.NOTHING_TO_READ_NOTE
 import com.mathnotes.solver.ui.failureNote
 import android.app.Application
@@ -101,7 +103,8 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun capturePage(raw: File) {
         _state.update { it.copy(busy = true, status = "Reading your page…") }
-        viewModelScope.launch {
+        requestJob?.cancel()
+        requestJob = viewModelScope.launch {
             try {
                 val page = withContext(Dispatchers.Default) { Preprocessor.processPage(getApplication(), raw, debug) }
                 val resp = solver.recognizePage(page)
@@ -138,6 +141,8 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
                 _events.emit(SetupEvent.Recognized)
+            } catch (e: CancellationException) {
+                throw e   // cancelled on purpose: not an error to show
             } catch (e: Exception) {
                 _state.update { it.copy(busy = false, status = "") }
                 Timber.w(e, "setup page recognition failed")
@@ -156,7 +161,8 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
         val index = retakeIndex
         if (index !in _state.value.lines.indices) return
         _state.update { it.copy(busy = true, status = "Reading that line…") }
-        viewModelScope.launch {
+        requestJob?.cancel()
+        requestJob = viewModelScope.launch {
             try {
                 val clean = withContext(Dispatchers.Default) { Preprocessor.process(getApplication(), raw, crop, debug) }
                 val result = solver.recognize(clean, persist = false)
@@ -171,6 +177,8 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 retakeIndex = -1
                 _events.emit(SetupEvent.Recognized)
+            } catch (e: CancellationException) {
+                throw e   // cancelled on purpose: not an error to show
             } catch (e: Exception) {
                 _state.update { it.copy(busy = false, status = "") }
                 Timber.w(e, "setup line retake failed")
@@ -203,7 +211,19 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Clear wizard state so a Settings "Redo setup" starts fresh. */
-    fun reset() = _state.update { SetupUiState() }
+    private var requestJob: Job? = null
+
+    /** Stop the page or line read in flight; its answer, if it still arrives, is dropped. */
+    fun cancelRequest() {
+        requestJob?.cancel()
+        requestJob = null
+        _state.update { it.copy(busy = false, status = "") }
+    }
+
+    fun reset() {
+        cancelRequest()
+        _state.update { SetupUiState() }
+    }
 
     /** Onboarding flag: set when the wizard finishes or is skipped; cleared to re-run it. */
     fun markSetupComplete() = viewModelScope.launch { WelcomePrefs.setSetupComplete(getApplication(), true) }

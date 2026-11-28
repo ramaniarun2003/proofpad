@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.rememberSaveable
 import timber.log.Timber
 import android.app.Activity
@@ -455,10 +456,18 @@ fun CaptureScreen(
 
         // Busy spinner over the guide.
         if (busy) {
-            CircularProgressIndicator(
-                Modifier.align(Alignment.Center),
-                color = NotepadColors.StickyYellow,
-            )
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                CircularProgressIndicator(color = NotepadColors.StickyYellow)
+                OutlinedButton(
+                    onClick = { if (pageMode) setupVm?.cancelRequest() else vm.cancelRequest() },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.5.dp, NotepadColors.Paper),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Paper),
+                ) { Text("Cancel", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
+            }
+            // Leaving with the back button cancels too.
+            BackHandler { if (pageMode) setupVm?.cancelRequest() else vm.cancelRequest() }
         }
 
         // Snackbar (page mode: "I could only find n lines…").
