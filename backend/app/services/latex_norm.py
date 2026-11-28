@@ -206,6 +206,23 @@ def prev_raw(tokens: list[tuple[str, str]], i: int) -> str:
     return "start"
 
 
+# `\sin x (x+1)`: the function's argument is the bare term right after it, and the parenthesis
+# is a separate factor. The parser would take everything juxtaposed as the argument, so the
+# bare argument gets its own parentheses first: `\sin(x) (x+1)`.
+_SCRIPT_ARG = r"(?:\s*[_^]\s*(?:\{[^{}]*\}|[a-zA-Z0-9]))*"
+_BARE_ARGUMENT = re.compile(
+    r"(\\(?:arc)?(?:sin|cos|tan|cot|sec|csc)h?(?![a-zA-Z])|\\(?:log|ln|exp)(?![a-zA-Z]))"   # the function
+    r"(" + _SCRIPT_ARG + r")\s*"                                                              # \sin^2, \log_2
+    r"((?:\d+(?:\.\d+)?\s*)?"                                                                 # 2
+    r"(?:(?:[a-zA-Z]|\\(?:alpha|beta|gamma|theta|phi|omega|pi)(?![a-zA-Z]))" + _SCRIPT_ARG + r"\s*)+)"   # x, x^2, \theta
+    r"(?=\()"
+)
+
+
+def _parenthesize_bare_arguments(s: str) -> str:
+    return _BARE_ARGUMENT.sub(lambda m: f"{m.group(1)}{m.group(2)}({m.group(3).strip()}) ", s)
+
+
 _MARK = "\x00"
 
 
@@ -237,6 +254,7 @@ def normalize(latex: str, functions: frozenset[str] | set[str] | None = None) ->
     s = add_sum_bounds(s)
     for pat, rep in _REPLACEMENTS:
         s = re.sub(pat, rep, s)
+    s = _parenthesize_bare_arguments(s)
     s = _group_implicit_products(s, functions)
     # "e^{x}" → "\exp(x)" is done on the SymPy side (Symbol e → E); nothing here.
     # Collapse whitespace and stray equals-signs at the ends.

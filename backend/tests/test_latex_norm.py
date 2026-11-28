@@ -98,3 +98,28 @@ def test_a_variable_parsed_as_a_function_is_an_error(monkeypatch):
     monkeypatch.setattr(latex_norm, "implicit_multiplication", lambda s, functions=None, times="": s)  # rewrite off
     with pytest.raises(ParseError, match=r"parsed x\(\.\.\.\) as a function"):
         parse(r"x(2\sin x + x\cos x)")
+
+
+@pytest.mark.parametrize("latex, expected", [
+    # a function's bare argument ends before a parenthesis: sin(x)·(x+1), not sin(x(x+1))
+    (r"\sin x (x+1)", "(x + 1)*sin(x)"),
+    (r"\sin x(x+1)", "(x + 1)*sin(x)"),
+    (r"\sin 2 x\left(x+1\right)", "(x + 1)*sin(2*x)"),
+    (r"\cos \theta (x+1)", "(x + 1)*cos(theta)"),
+    (r"\sin^{2} x (x+1)", "(x + 1)*sin(x)**2"),
+    (r"\sin x^2 (x+1)", "(x + 1)*sin(x**2)"),
+    (r"\ln x (x+1)", "(x + 1)*log(x)"),
+    (r"\log_2 x (x+1)", "(x + 1)*log(x, 2)"),
+    (r"e^{x} \sin x (2x)", "2*x*exp(x)*sin(x)"),
+    (r"\cos x \sin x (x+1)", "((x + 1)*sin(x))*cos(x)"),
+    (r"\frac{d}{dx} \sin x (x+1)", "Derivative((x + 1)*sin(x), x)"),
+    (r"\int \sin x (x+1) dx", "Integral((x + 1)*sin(x), x)"),
+    # unchanged: the parenthesis is the argument, or there is no parenthesis
+    (r"\sin(x+1)", "sin(x + 1)"),
+    (r"\sin (3 x)", "sin(3*x)"),
+    (r"\sin(x)(x+1)", "(x + 1)*sin(x)"),
+    (r"\sin x \cos x", "sin(x)*cos(x)"),
+    (r"\sin x + (x+1)", "(x + 1) + sin(x)"),
+])
+def test_a_bare_function_argument_ends_at_a_parenthesis(latex, expected):
+    assert str(parse(latex).expr) == expected

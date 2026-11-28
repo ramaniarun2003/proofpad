@@ -238,3 +238,9 @@ def test_numeric_sampling_skips_singular_and_complex_points():
     assert _numeric_agree(sp.log(x - 1000)) is None                 # never real at the sample points
     assert _numeric_agree(1 / (x - sp.Rational(1, 3)) * 0 + x - x) is True
     assert _numeric_agree(sp.Integer(1)) is False
+
+
+def test_a_step_with_a_function_times_a_parenthesis_is_checked_as_a_product():
+    # d/dx (x² + x) sin x, written with the sine first
+    res = check(r"\frac{d}{dx} \sin x (x^2+x)", [r"\cos x (x^2+x) + \sin x (2x+1)"])
+    assert res.verdict == "verified"
