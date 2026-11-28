@@ -119,7 +119,7 @@ class VerifyRequest(BaseModel):
 class UserStepCheck(BaseModel):
     latex: str                       # a series claim comes back as \text{converges} / \text{diverges}
     status: str                      # "ok" | "wrong" | "unparseable"
-    rule: str = ""                   # rule name, "skipped n steps: …", or "unrecognized but correct"
+    rule: str = ""                   # rule name, "<rule> (skipped n steps)", or "unrecognized but correct"
     hint: str = ""                   # common-mistake hint, or what the last step still lacks
 
 

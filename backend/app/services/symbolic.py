@@ -8,7 +8,7 @@ import sympy as sp
 
 from ..models import Topic
 from .latex_derivative import parse_derivative_latex
-from .latex_norm import normalize
+from .latex_norm import declared_functions, normalize
 
 _INTEGRAL_SIGN = re.compile(r"\\(?:iiint|iint|int)(?![A-Za-z])")
 _LATEX_TOKEN = re.compile(r"d\s*(\\[A-Za-z]+|[A-Za-z])|\\[A-Za-z]+|[^\s)}\]]")
@@ -30,6 +30,7 @@ class Parsed:
     is_partial_derivative: bool = False
     point: sp.Basic | None = None   # the approached value a, for limits
     direction: str = "+-"            # "+", "-", or "+-" for limits
+    functions: frozenset[str] = frozenset()   # letters the problem uses as functions (f, g, h)
 
     @property
     def derivative_expression(self) -> sp.Expr:
@@ -78,8 +79,28 @@ def _trailing_differentials(text: str) -> list[str]:
     return names
 
 
-def parse(latex: str, variable: str = "x") -> Parsed:
-    text = normalize(latex)
+def _reject_variable_functions(expr: sp.Basic, functions: frozenset[str]) -> None:
+    """
+    `x(…)` must never come back as Function('x')(…): the implicit-multiplication rewrite in
+    latex_norm is meant to prevent it, and this makes any gap loud instead of a silent wrong answer.
+    """
+    for call in expr.atoms(sp.core.function.AppliedUndef):
+        name = call.func.__name__
+        if name.rstrip("'") in functions or name.endswith("'"):
+            continue
+        raise ParseError(f"parsed {name}(...) as a function; write the product as {name} \\cdot (...)")
+
+
+def parse(latex: str, variable: str = "x", functions: frozenset[str] | set[str] | None = None) -> Parsed:
+    """`functions`: letters to read as functions in addition to those the text itself declares."""
+    functions = declared_functions(latex) | frozenset(functions or ())
+    parsed = _parse(latex, variable, functions)
+    parsed.functions = functions
+    return parsed
+
+
+def _parse(latex: str, variable: str, functions: frozenset[str]) -> Parsed:
+    text = normalize(latex, functions)
     if not text:
         raise ParseError("empty expression")
     text = _INTEGRAL_SIGN.sub(_expand_integral_sign, text)
@@ -94,6 +115,7 @@ def parse(latex: str, variable: str = "x") -> Parsed:
         if _trailing_differentials(text) != [v.name for v in expr.variables]:
             raise ParseError("write one differential per integral sign, in integration order")
     expr = _fix_constants(expr)
+    _reject_variable_functions(expr, functions)
     var = sp.Symbol(variable)
     has_partial = r"\partial" in text
 

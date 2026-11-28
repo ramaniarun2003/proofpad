@@ -1,0 +1,54 @@
+{
+  "request_id": "3c4b0e1e-f2e8-4e91-beb8-0ddee98ba02c",
+  "version": "SuperNet-202",
+  "is_printed": false,
+  "is_handwritten": true,
+  "auto_rotate_confidence": 2.7119889667304165e-10,
+  "auto_rotate_degrees": 0,
+  "image_height": 974,
+  "image_width": 1600,
+  "parse_status": "parsed",
+  "fallback_count": 0,
+  "page_confidence": {
+    "confidence": 0.8645685911178589,
+    "text_confidence": null,
+    "layout_confidence": 0.8645685911178589,
+    "method": "prototype_min_v1"
+  },
+  "confidence": 0.89697265625,
+  "confidence_rate": 0.99867490431387,
+  "latex_styled": "\\begin{array}{l}\nd / d x \\quad x^{2} \\sin x \\\\\n=2 x \\sin x+x^{2} \\cos x \\\\\n=x(2 \\sin x+x \\cos x)\n\\end{array}",
+  "text": "$\\begin{array}{l}d / d x \\quad x^{2} \\sin x \\\\ =2 x \\sin x+x^{2} \\cos x \\\\ =x(2 \\sin x+x \\cos x)\\end{array}$",
+  "line_data": [
+    {
+      "type": "math",
+      "cnt": [
+        [
+          131,
+          162
+        ],
+        [
+          1459,
+          162
+        ],
+        [
+          1459,
+          587
+        ],
+        [
+          131,
+          587
+        ]
+      ],
+      "included": true,
+      "conversion_output": true,
+      "is_printed": false,
+      "is_handwritten": true,
+      "id": "8e816f2a0aeb4109b0980e7970758039",
+      "text": "$\\begin{array}{l}d / d x \\quad x^{2} \\sin x \\\\ =2 x \\sin x+x^{2} \\cos x \\\\ =x(2 \\sin x+x \\cos x)\\end{array}$",
+      "after_hyphen": false,
+      "confidence": 0.89697265625,
+      "confidence_rate": 0.99867490431387
+    }
+  ]
+}

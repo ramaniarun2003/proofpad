@@ -331,3 +331,22 @@ def test_todays_notebook_page_gives_one_problem_per_line(monkeypatch, tmp_path, 
     assert (body["problem_latex"], body["steps"], body["topic_guess"]) == (
         chosen["problem_latex"], chosen["steps"], chosen["topic_guess"])
     assert all(p["bbox"] for p in body["problems"])
+
+
+def test_handwritten_three_line_derivative_with_a_factored_last_line(monkeypatch, tmp_path):
+    """
+    Pixel 7, 2026-11-27 18:49: `d/dx x² sin x`, `= 2x sin x + x² cos x`, `= x(2 sin x + x cos x)`.
+    The last line was flagged because `x(…)` parsed as a function call.
+    """
+    body = _recognize_fixture(monkeypatch, tmp_path, "handwritten_chain_factored")
+    assert body["problem_latex"] == r"d / d x \quad x^{2} \sin x"
+    assert body["steps"] == [r"2 x \sin x+x^{2} \cos x", r"x(2 \sin x+x \cos x)"]
+    assert (body["topic_guess"], body["parse_error"], len(body["problems"])) == ("derivative", None, 1)
+    assert _verify(body["problem_latex"], body["steps"])["verified"] is True      # older request shape
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    res = TestClient(app).post("/verify", json={"problem_latex": body["problem_latex"],
+                                                "user_steps": body["steps"]}).json()
+    assert (res["verdict"], res["verified"], res["mismatch_at"]) == ("verified", True, None)
+    assert [s["rule"] for s in res["steps"]] == ["product rule (skipped 2 steps)", "simplify"]

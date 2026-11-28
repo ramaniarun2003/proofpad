@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -163,12 +165,13 @@ fun ResultsContent(
             ) { Text("New problem", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
         },
     ) {
-        // Problem + stamp.
-        Box(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-            Column {
-                NotepadLabel("Problem", fontSize = 17)
-                LatexView(problemLatex, Modifier.padding(top = 2.dp), textSizePx = with(density) { 26.sp.toPx() })
-            }
+        // Header row: "Problem" on the left, the stamp on the right, so the stamp never sits on the math.
+        Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NotepadLabel("Problem", fontSize = 17)
             Stamp(
                 text = when {
                     verified -> "VERIFIED"
@@ -177,8 +180,12 @@ fun ResultsContent(
                 },
                 verified = verified,
                 tint = if (isIncomplete) NotepadColors.DifficultyMedium else null,
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 6.dp),
             )
+        }
+        // The problem at its own size (26sp, as in the mockup); a long one scrolls sideways
+        // instead of being scaled to the page width.
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            LatexView(displayProblem(problemLatex), textSizePx = with(density) { 26.sp.toPx() }, fillWidth = false)
         }
 
         Spacer(Modifier.height(12.dp))

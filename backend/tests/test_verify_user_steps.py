@@ -46,7 +46,7 @@ def test_antiderivative_without_constant_is_incomplete():
 def test_skipping_our_intermediate_steps_is_still_verified():
     res = check(r"\frac{d}{dx}(x^2 \sin x)", [r"2x \sin x + x^2 \cos x"])
     assert res.verdict == "verified"
-    assert res.steps[0].rule == "skipped 2 steps"
+    assert res.steps[0].rule == "product rule (skipped 2 steps)"
     assert "product rule" in res.steps[0].hint          # which rules the line folded together
 
 
@@ -124,7 +124,7 @@ def test_verify_api_student_chain_response_shape():
     body = r.json()
     assert body["verdict"] == "verified" and body["verified"] is True and body["mismatch_at"] is None
     assert body["steps"] == [{"latex": r"3 \cos (3 x)", "status": "ok",
-                              "rule": "skipped 2 steps",
+                              "rule": "chain rule with sin (skipped 2 steps)",
                               "hint": "correct; this line does several rules at once: "
                                       "chain rule with sin, constant multiple, identity"}]
     assert body["expected_final"] == r"3 \cos{\left(3 x \right)}"
@@ -156,3 +156,85 @@ def test_old_edited_chain_shape_still_works():
     steps = [{"index": 0, "rule": "power rule", "before_latex": r"\frac{d}{dx}(x^3+x)", "after_latex": "3x^2+1", "note": ""}]
     body = _post({"session_id": "", "latex": r"\frac{d}{dx}(x^3+x)", "steps": steps}).json()
     assert body["verified"] is True and body["verdict"] == "verified" and body["steps"] == []
+
+
+# --- Implicit multiplication: x(…) is a product, not a function call --------------------------
+
+TODAY = r"d / d x x^{2} \sin x"          # the three-line derivative from the Pixel, 2026-11-27
+STEP_1 = r"2x\sin x + x^2\cos x"
+
+
+@pytest.mark.parametrize("factored", [
+    r"x(2\sin x + x\cos x)",      # as the student wrote it
+    r"x(x\cos x + 2\sin x)",      # our own order
+    r"(2\sin x + x\cos x)x",
+    r"x\left(2 \sin x+x \cos x\right)",   # Mathpix spacing
+])
+def test_factored_last_line_of_todays_chain_is_verified(factored):
+    res = check(TODAY, [STEP_1, factored])
+    assert (res.verdict, res.mismatch_at) == ("verified", None)
+    assert [s.status for s in res.steps] == ["ok", "ok"]
+    assert res.steps[0].rule == "product rule (skipped 2 steps)"
+    assert res.steps[1].rule in ("simplify", "unrecognized but correct")
+    assert res.user_final_equals_expected
+
+
+def test_todays_chain_through_the_api():
+    body = _post({"problem_latex": TODAY, "user_steps": [STEP_1, r"x(2\sin x + x\cos x)"]}).json()
+    assert (body["verdict"], body["verified"], body["mismatch_at"]) == ("verified", True, None)
+    assert [s["rule"] for s in body["steps"]] == ["product rule (skipped 2 steps)", "simplify"]
+
+
+def test_a_wrong_factoring_is_still_flagged():
+    res = check(TODAY, [STEP_1, r"x(2\sin x - x\cos x)"])
+    assert (res.verdict, res.mismatch_at) == ("mismatch", 1)
+
+
+# --- Equivalence stages -----------------------------------------------------------------------
+
+@pytest.mark.parametrize("a, b, stage", [
+    ("x*(x + 1)", "x*(x + 1)", "identical form"),
+    ("x*(2*sin(x) + x*cos(x))", "2*x*sin(x) + x**2*cos(x)", "simplify"),
+    ("sin(x)**2 + cos(x)**2", "1", "simplify"),
+])
+def test_equivalent_logs_the_stage_that_decided(caplog, a, b, stage):
+    import logging
+
+    import sympy as sp
+
+    from app.services.verify import equivalent
+    with caplog.at_level(logging.INFO, logger="proofpad.verify"):
+        assert equivalent(sp.sympify(a), sp.sympify(b), label="step 2")
+    assert f"equivalence [step 2]: equal by {stage}" in caplog.text
+
+
+def test_equivalent_falls_through_to_later_stages(monkeypatch, caplog):
+    import logging
+
+    import sympy as sp
+
+    from app.services import verify as v
+    x = sp.Symbol("x")
+    a, b = (x + 1) ** 2, x ** 2 + 2 * x + 1
+    monkeypatch.setattr(sp, "simplify", lambda e, **kw: e)            # stage 1 cannot decide
+    with caplog.at_level(logging.INFO, logger="proofpad.verify"):
+        assert v.equivalent(a, b, label="t")
+    assert "equal by expand" in caplog.text
+    caplog.clear()
+    monkeypatch.setattr(sp, "expand", lambda e, **kw: e)              # nor stages 2 and 3
+    monkeypatch.setattr(sp, "trigsimp", lambda e, **kw: e)
+    with caplog.at_level(logging.INFO, logger="proofpad.verify"):
+        assert v.equivalent(a, b, label="t")
+        assert not v.equivalent(a, b + x, label="t")
+    assert "equal by numeric sampling" in caplog.text
+    assert "DIFFERENT by numeric sampling" in caplog.text
+
+
+def test_numeric_sampling_skips_singular_and_complex_points():
+    import sympy as sp
+
+    from app.services.verify import _numeric_agree
+    x = sp.Symbol("x")
+    assert _numeric_agree(sp.log(x - 1000)) is None                 # never real at the sample points
+    assert _numeric_agree(1 / (x - sp.Rational(1, 3)) * 0 + x - x) is True
+    assert _numeric_agree(sp.Integer(1)) is False

@@ -67,3 +67,17 @@ fun NoteText(note: String, fontFamily: FontFamily, fontSize: TextUnit, color: Co
         }
     }
 }
+
+
+private val SLASH_DERIVATIVE = Regex("""(?<![a-zA-Z\\])d\s*/\s*d\s*([a-zA-Z])(?![a-zA-Z])\s*""")
+private val SLASH_PARTIAL = Regex("""\\partial\s*/\s*\\partial\s*([a-zA-Z])(?![a-zA-Z])\s*""")
+
+/**
+ * The problem as shown on the Results page: a derivative written with a slash (`d/dx`, as Mathpix
+ * reads handwriting) is typeset as a fraction. Display only; the stored LaTeX is not changed.
+ */
+fun displayProblem(latex: String): String =
+    latex
+        .replace(SLASH_DERIVATIVE) { "\\frac{d}{d${it.groupValues[1]}} " }
+        .replace(SLASH_PARTIAL) { "\\frac{\\partial}{\\partial ${it.groupValues[1]}} " }
+        .trim()

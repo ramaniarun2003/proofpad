@@ -30,4 +30,17 @@ class NoteTextTest {
     @Test fun an_unmatched_dollar_stays_text() {
         assertEquals(listOf(NotePart("costs $5 today", false)), splitNote("costs $5 today"))
     }
+
+    @Test fun slash_derivative_is_shown_as_a_fraction() {
+        assertEquals("""\frac{d}{dx} x^{2} \sin x""", displayProblem("""d / d x x^{2} \sin x"""))
+        assertEquals("""\frac{d}{dx} (x^2)""", displayProblem("d/dx(x^2)"))
+        assertEquals("""\frac{\partial}{\partial x} \left(x^{2} y\right)""", displayProblem("""\partial / \partial x\left(x^{2} y\right)"""))
+    }
+
+    @Test fun other_problems_are_shown_as_written() {
+        assertEquals("""\frac{d}{dx} x^2""", displayProblem("""\frac{d}{dx} x^2"""))
+        assertEquals("""\int 2x \, dx""", displayProblem("""\int 2x \, dx"""))
+        assertEquals("""\sum_{n=1}^{\infty} \frac{1}{n^{2}}""", displayProblem("""\sum_{n=1}^{\infty} \frac{1}{n^{2}}"""))
+        assertEquals("a d / b", displayProblem("a d / b"))
+    }
 }

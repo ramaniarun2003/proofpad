@@ -7,6 +7,7 @@ solutions compare each transition and then compare the final result.
 """
 from __future__ import annotations
 
+import logging
 import random
 import re
 from dataclasses import dataclass, field
@@ -17,6 +18,8 @@ import sympy as sp
 from ..models import Topic
 from .steps.base import Solution, StepRec
 from .symbolic import Parsed, parse
+
+log = logging.getLogger("proofpad.verify")
 
 N_SAMPLES = 7
 TOL = 1e-6
@@ -29,24 +32,19 @@ class VerifyResult:
     details: list[str]
 
 
-def equivalent(a: sp.Basic, b: sp.Basic, antiderivative_vars: tuple[sp.Symbol, ...] = ()) -> bool:
-    """Symbolic check first; numeric sampling as a fallback when simplify() cannot decide."""
-    a = a.doit()
-    b = b.doit()
-    if a == b and not a.has(sp.nan):
-        return True
-    diff = a - b
-    if antiderivative_vars:
-        diff = sp.diff(diff, *antiderivative_vars)
-    try:
-        if sp.simplify(diff) == 0:
-            return True
-    except Exception:
-        pass
+def _is_zero(expr: sp.Basic) -> bool:
+    return expr == 0 or expr.is_zero is True
+
+
+def _numeric_agree(diff: sp.Basic) -> bool | None:
+    """
+    Evaluate `diff` at N_SAMPLES real points. Points where it is undefined or not real (a
+    singularity, a log of a negative number) are skipped. None when no point could be used.
+    """
     free = sorted(diff.free_symbols, key=lambda s: s.name)
     rng = random.Random(0)
     tried = 0
-    for _ in range(N_SAMPLES * 4):
+    for _ in range(N_SAMPLES * 6):
         if tried >= N_SAMPLES:
             break
         point = {s: sp.Rational(rng.randint(1, 40), rng.randint(1, 7)) for s in free}
@@ -54,12 +52,51 @@ def equivalent(a: sp.Basic, b: sp.Basic, antiderivative_vars: tuple[sp.Symbol, .
             val = complex(diff.subs(point).evalf())
         except Exception:
             continue
-        if val != val:  # nan
+        if val != val or abs(val) == float("inf") or abs(val.imag) > TOL:
             continue
         tried += 1
         if abs(val) > TOL:
             return False
-    return tried > 0
+    return True if tried else None
+
+
+def equivalent(a: sp.Basic, b: sp.Basic, antiderivative_vars: tuple[sp.Symbol, ...] = (),
+               label: str = "") -> bool:
+    """
+    Are `a` and `b` the same expression (up to a constant, for antiderivatives)? Four stages, and
+    only when all four fail is the answer no:
+
+    1. simplify(a - b) == 0     2. expand     3. trigsimp     4. numeric sampling at 7 real points
+
+    The stage that decided is logged (at INFO when `label` names the step being checked).
+    """
+    def decided(stage: str, result: bool) -> bool:
+        log.log(logging.INFO if label else logging.DEBUG, "equivalence%s: %s by %s",
+                f" [{label}]" if label else "", "equal" if result else "DIFFERENT", stage)
+        return result
+
+    a = a.doit()
+    b = b.doit()
+    if a == b and not a.has(sp.nan):
+        return decided("identical form", True)
+    diff = a - b
+    if antiderivative_vars:
+        diff = sp.diff(diff, *antiderivative_vars)
+    stages = (
+        ("simplify", sp.simplify),
+        ("expand", lambda e: sp.expand(e, trig=False)),
+        ("trigsimp", lambda e: sp.trigsimp(sp.expand(e, trig=True))),
+    )
+    for stage, transform in stages:
+        try:
+            if _is_zero(transform(diff)):
+                return decided(stage, True)
+        except Exception:
+            continue
+    agree = _numeric_agree(diff)
+    if agree is None:
+        return decided("all four stages (no usable sample point)", False)
+    return decided("numeric sampling", agree)
 
 
 def _limit_truth(p: Parsed):
@@ -275,7 +312,7 @@ class UserChainResult:
     details: list[str] = field(default_factory=list)
 
 
-def _parse_user_step(text: str) -> sp.Basic:
+def _parse_user_step(text: str, functions: frozenset[str] = frozenset()) -> sp.Basic:
     """Parse one student step with the project parser (same handling as edited steps)."""
     text = text.strip().lstrip("=").strip()
     if not text:
@@ -284,8 +321,8 @@ def _parse_user_step(text: str) -> sp.Basic:
         raise ValueError("brackets do not match")   # the LaTeX parser would silently guess
     if text.count(r"\int") > 1 and re.search(r"[+-]\s*(?:\d+(?:\.\d+)?\s*)?\\int", text):
         terms = re.split(r"(?=[+-]\s*(?:\d+(?:\.\d+)?\s*)?\\int)", text)
-        return sp.Add(*[parse(term.lstrip("+ ")).expr for term in terms if term.strip()])
-    return parse(text).expr
+        return sp.Add(*[parse(term.lstrip("+ "), functions=functions).expr for term in terms if term.strip()])
+    return parse(text, functions=functions).expr
 
 
 def _rebuild(e: sp.Basic) -> sp.Basic:
@@ -469,7 +506,7 @@ def verify_user_steps(p: Parsed, topic: Topic, user_steps: list[str]) -> UserCha
 
     for i, text in enumerate(user_steps):
         try:
-            expr = _parse_user_step(text)
+            expr = _parse_user_step(text, p.functions)
         except Exception as exc:
             results.append(UserStepResult(text, "unparseable", hint=f"I could not read this step: {str(exc)[:120]}"))
             mismatch_at = i if mismatch_at is None else mismatch_at
@@ -486,9 +523,9 @@ def verify_user_steps(p: Parsed, topic: Topic, user_steps: list[str]) -> UserCha
             if topic == Topic.limit:
                 ok = _values_equal(expr.doit() if expr.has(sp.Limit) else expr, truth)
             else:
-                ok = equivalent(expr, truth, anti_vars)
+                ok = equivalent(expr, truth, anti_vars, label=f"step {i + 1}")
                 if not ok and definite:   # the antiderivative, before the bounds are applied
-                    ok = is_anti = equivalent(expr, antiderivative, (p.var,))
+                    ok = is_anti = equivalent(expr, antiderivative, (p.var,), label=f"step {i + 1} as antiderivative")
         except Exception:
             ok = False
 
@@ -511,9 +548,9 @@ def verify_user_steps(p: Parsed, topic: Topic, user_steps: list[str]) -> UserCha
                 if skipped == 0:
                     rule = chain[j].rule
                 else:
-                    # Short label for the row; which rules were folded in goes in the note.
+                    # The row is labelled by the first rule the line applies; the rest go in the note.
                     names = ", ".join(s.rule for s in chain[pos + 1:j + 1][:5])
-                    rule = f"skipped {skipped} step{'s' if skipped != 1 else ''}"
+                    rule = f"{chain[pos + 1].rule} (skipped {skipped} step{'s' if skipped != 1 else ''})"
                     note = f"correct; this line does several rules at once: {names}"
                 pos = j
                 break

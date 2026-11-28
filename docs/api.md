@@ -88,9 +88,13 @@ Response `200`:
 - `verdict`: `verified`, `mismatch` (first wrong or unparseable step is `mismatch_at`), or `incomplete`
   (every step right, but the last is not the final answer: an operator left, bounds not applied, or no `+ C`).
 - Step `status`: `ok` | `wrong` | `unparseable`. Each step is compared with the independent SymPy result
-  (`simplify(a - b) == 0`, then numeric sampling at 7 points); equivalence is what counts.
-- Step `rule` is a label: our rule name when the step is the next state of our own chain, `skipped n steps`
-  when it is a later state, `unrecognized but correct` otherwise.
+  in four stages (`simplify(a - b) == 0`, then `expand`, then `trigsimp`, then numeric sampling at 7 real
+  points, skipping singular ones) and is only `wrong` when all four fail. The backend logs which stage
+  decided (`proofpad.verify: equivalence [step 2]: equal by simplify`).
+- Implicit multiplication is read as a product: `x(2\\sin x + x\\cos x)` is x·(…), not a function call.
+  `f`, `g`, `h` are functions only where the text uses them as such (`f'`, `g(x)`).
+- Step `rule` is a label: our rule name when the step is the next state of our own chain,
+  `<first rule> (skipped n steps)` when it is a later state, `unrecognized but correct` otherwise.
 - Step `hint`: sign flipped, chain rule missing, wrong power, off by a constant factor, missing constant of
   integration; for a skipped step, which rules it folded together.
 - The operator written in `problem_latex` decides the topic.
