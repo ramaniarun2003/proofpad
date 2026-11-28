@@ -117,3 +117,5 @@ Room, so **History** on the phone shows solved problems even if the network drop
   the shutter (the opt-in perspective warp in `Preprocessor`). Wiring it to the preview needs a
   CameraX `ImageAnalysis` use case, per-frame quad detection, and thresholds for "too dark" and
   "too tilted" tuned on real pages.
+- **Debug APK size.** The debug APK carries OpenCV for four ABIs (about 200 MB). A release or
+  per-ABI build is much smaller; nothing in the code depends on the extra ABIs.
