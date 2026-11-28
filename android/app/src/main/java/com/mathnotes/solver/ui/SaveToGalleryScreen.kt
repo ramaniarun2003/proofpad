@@ -117,7 +117,9 @@ fun SaveToGalleryContent(
         }
     }
 
-    val canSave = selectedFolderId != null && difficulty != null
+    // Set on the first tap of either save button: the sheet is about to close, a second tap must not save twice.
+    var saving by remember { mutableStateOf(false) }
+    val canSave = selectedFolderId != null && difficulty != null && !saving
     val selectedFolderName = folders.firstOrNull { it.folder.id == selectedFolderId }?.folder?.name
 
     Box(Modifier.fillMaxSize().background(NotepadColors.CaptureScrim)) {
@@ -222,7 +224,7 @@ fun SaveToGalleryContent(
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
-                    onClick = { selectedFolderId?.let { fid -> difficulty?.let { d -> onSave(fid, title, d, selectedTags.toList(), keepPhoto, true) } } },
+                    onClick = { selectedFolderId?.let { fid -> difficulty?.let { d -> saving = true; onSave(fid, title, d, selectedTags.toList(), keepPhoto, true) } } },
                     enabled = canSave,
                     modifier = Modifier.weight(1f).height(48.dp),
                     shape = RoundedCornerShape(10.dp),
@@ -232,7 +234,7 @@ fun SaveToGalleryContent(
                 ) { Text("Save + export PDF", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp, maxLines = 1, softWrap = false) }
 
                 Button(
-                    onClick = { selectedFolderId?.let { fid -> difficulty?.let { d -> onSave(fid, title, d, selectedTags.toList(), keepPhoto, false) } } },
+                    onClick = { selectedFolderId?.let { fid -> difficulty?.let { d -> saving = true; onSave(fid, title, d, selectedTags.toList(), keepPhoto, false) } } },
                     enabled = canSave,
                     modifier = Modifier.weight(1f).height(48.dp),
                     shape = RoundedCornerShape(10.dp),

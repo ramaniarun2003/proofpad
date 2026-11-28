@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import timber.log.Timber
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -226,13 +227,19 @@ fun CaptureScreen(
         onGalleryPicked()
     }
 
+    // True from the shutter tap until CameraX has written the photo: `busy` only starts after that.
+    var capturing by remember { mutableStateOf(false) }
+
     fun capture() {
+        if (capturing) return
+        capturing = true
         val f = File(ctx.cacheDir, "capture_${System.currentTimeMillis()}.jpg")
         imageCapture.takePicture(
             ImageCapture.OutputFileOptions.Builder(f).build(),
             ContextCompat.getMainExecutor(ctx),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                    capturing = false
                     val crop = CropSpec.GuideBox(
                         viewWidth = previewSize.width.toFloat(),
                         viewHeight = previewSize.height.toFloat(),
@@ -252,7 +259,11 @@ fun CaptureScreen(
                         vm.submitCapture(f, crop, topicHint)
                     }
                 }
-                override fun onError(exception: ImageCaptureException) { /* surface via snackbar */ }
+                override fun onError(exception: ImageCaptureException) {
+                    capturing = false
+                    Timber.w(exception, "photo capture failed")
+                    vm.notify(UiMessage("I couldn't take that photo. Try again."))
+                }
             },
         )
     }
@@ -417,7 +428,7 @@ fun CaptureScreen(
             ) { Canvas(Modifier.size(28.dp)) { drawGalleryGlyph(NotepadColors.Ink) } }
 
             // Shutter.
-            val shutterEnabled = hasPermission && !busy
+            val shutterEnabled = hasPermission && !busy && !capturing
             Box(
                 Modifier
                     .size(82.dp)

@@ -327,7 +327,7 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
 
             Button(
                 onClick = vm::verify,
-                enabled = state.latex.isNotBlank(),
+                enabled = state.latex.isNotBlank() && !state.busy,
                 modifier = Modifier.weight(1.4f).height(48.dp),
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),

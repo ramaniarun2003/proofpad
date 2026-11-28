@@ -141,6 +141,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _captureEvents = MutableSharedFlow<CaptureEvent>(extraBufferCapacity = 4)
     val captureEvents = _captureEvents.asSharedFlow()
+    private var saving = false
     private val _messages = MutableSharedFlow<UiMessage>(extraBufferCapacity = 8)
     val messages = _messages.asSharedFlow()
     fun notify(message: UiMessage) { _messages.tryEmit(message) }
@@ -285,12 +286,15 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         val id = _state.value.sessionId
         if (id.isBlank()) { onDone(); return }
+        if (saving) return
+        saving = true
         _state.update { it.copy(difficulty = difficulty) } // keep the Results stars in sync
         viewModelScope.launch {
             galleryRepo.saveToGallery(id, folderId, title?.ifBlank { null }, difficulty, tags, keepPhoto)
             val folder = folders.value.firstOrNull { it.folder.id == folderId }?.folder?.name ?: "your gallery"
             _state.update { it.copy(savedTo = folder) }
             notify(UiMessage("Saved to $folder"))
+            saving = false
             onDone()
         }
     }
@@ -320,6 +324,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
      * photo, open the discovery sheet, and recognize automatically once a backend connects.
      */
     fun submitCapture(raw: File, crop: CropSpec? = null, topicHint: String = "unknown") {
+        if (_state.value.busy) return   // one photo at a time
         if (backend.value is BackendState.Connected) {
             captureAndRecognize(raw, crop, topicHint)
             _captureEvents.tryEmit(CaptureEvent.NavigateToReview)
@@ -456,6 +461,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     /** "Check my steps": the problem plus the user's (edited) chain go to /verify. No steps → solve. */
     fun verify() {
         val s = _state.value
+        if (s.busy) return   // a second tap while the first request is in flight
         val chain = s.userSteps.map { it.trim().removePrefix("=").trim() }.filter { it.isNotEmpty() }
         if (chain.isEmpty()) { solve(); return }
         _state.update { it.copy(busy = true, status = "Verifying steps…", error = null, parseError = null) }
@@ -555,6 +561,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     /** Step 5–6: send the confirmed LaTeX; receive steps + verification. */
     fun solve() {
         val s = _state.value
+        if (s.busy) return   // a second tap while the first request is in flight
         _state.update { it.copy(busy = true, status = "Solving…", error = null, parseError = null) }
         viewModelScope.launch {
             try {
