@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import com.mathnotes.solver.ui.components.NotePressMenu
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -84,6 +85,7 @@ fun HistoryScreen(vm: SolverViewModel, onOpen: () -> Unit, onSettings: () -> Uni
         history = history,
         stepCountOf = vm::stepCount,
         onOpen = { vm.openCached(it); onOpen() },
+        onDelete = vm::deleteNote,
         onSettings = onSettings,
         onSnap = onSnap,
     )
@@ -97,6 +99,7 @@ fun HistoryContent(
     onOpen: (SessionEntity) -> Unit,
     onSettings: () -> Unit,
     onSnap: () -> Unit,
+    onDelete: ((SessionEntity) -> Unit)? = null,
 ) {
     var filter by remember { mutableStateOf("All") }
 
@@ -133,13 +136,13 @@ fun HistoryContent(
                                 fontFamily = NotepadFonts.PatrickHand, fontSize = 16.sp,
                                 lineHeight = 36.sp, color = NotepadColors.Muted,
                             )
-                            is HistoryRow.Entry -> HistoryItem(row.session, row.index, stepCountOf) { onOpen(row.session) }
+                            is HistoryRow.Entry -> HistoryItem(row.session, row.index, stepCountOf, onDelete?.let { d -> { d(row.session) } }) { onOpen(row.session) }
                         }
                     }
                     item {
                         StickyNote(Modifier.padding(start = 64.dp, end = 24.dp, top = 12.dp, bottom = 16.dp).fillMaxWidth(0.62f), rotationDeg = -1.5f) {
                             Text(
-                                "Tap a problem to reopen it — saved offline, even with no network.",
+                                "Tap a problem to reopen it — saved offline, even with no network. Press and hold one to delete it.",
                                 fontFamily = NotepadFonts.PatrickHand, fontSize = 15.sp, color = NotepadColors.NoteInkYellow,
                             )
                         }
@@ -173,9 +176,10 @@ fun HistoryContent(
 }
 
 @Composable
-private fun HistoryItem(s: SessionEntity, index: Int, stepCountOf: (SessionEntity) -> Int, onClick: () -> Unit) {
+private fun HistoryItem(s: SessionEntity, index: Int, stepCountOf: (SessionEntity) -> Int, onDelete: (() -> Unit)?, onClick: () -> Unit) {
+    NotePressMenu(onClick = onClick, onDelete = onDelete) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 72.dp).clickable(onClick = onClick).padding(vertical = 6.dp),
+        Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
@@ -222,6 +226,7 @@ private fun HistoryItem(s: SessionEntity, index: Int, stepCountOf: (SessionEntit
                 AsyncImage(model = f, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
         }
+    }
     }
 }
 

@@ -57,6 +57,8 @@ data class SolverUiState(
     val difficulty: Difficulty? = null,
     /** The student's own working, one LaTeX step per row (prefilled from the Identify split). */
     val userSteps: List<String> = emptyList(),
+    /** The folder this note was last saved to, once it has been; Results shows it on the save button. */
+    val savedTo: String? = null,
     /** Every problem found in the capture (more than one for a page of problems) and the one loaded. */
     val problems: List<ProblemSplit> = emptyList(),
     val problemIndex: Int = 0,
@@ -89,6 +91,20 @@ private const val BACKEND_URL_PREF = "backend_url"
 /** A photo taken while the backend was unreachable, retried automatically once connected. */
 private data class PendingCapture(val raw: File, val crop: CropSpec?, val topicHint: String)
 
+/**
+ * A short notice shown at the bottom of whatever screen is up (MainActivity hosts it), with an
+ * optional action such as Undo. It stays for [UiMessage.MILLIS], then [onDismissed] runs unless
+ * the action was taken.
+ */
+data class UiMessage(
+    val text: String,
+    val actionLabel: String? = null,
+    val onAction: (() -> Unit)? = null,
+    val onDismissed: (() -> Unit)? = null,
+) {
+    companion object { const val MILLIS = 5_000L }
+}
+
 /** One-shot signals the capture flow sends to the UI. */
 sealed interface CaptureEvent {
     data object NavigateToReview : CaptureEvent
@@ -118,6 +134,10 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _captureEvents = MutableSharedFlow<CaptureEvent>(extraBufferCapacity = 4)
     val captureEvents = _captureEvents.asSharedFlow()
+    private val _messages = MutableSharedFlow<UiMessage>(extraBufferCapacity = 8)
+    val messages = _messages.asSharedFlow()
+    fun notify(message: UiMessage) { _messages.tryEmit(message) }
+
     private var pending: PendingCapture? = null
     /** The most recent capture, kept so a failed recognition can be retried from Review. */
     private var lastCapture: PendingCapture? = null
@@ -198,7 +218,44 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     fun setFolderTopic(topic: String?) = _folderFilter.update { it.copy(topic = topic) }
     fun setFolderDifficulty(d: Difficulty?) = _folderFilter.update { it.copy(difficulty = d) }
     fun renameFolder(id: Long, name: String) { viewModelScope.launch { galleryRepo.renameFolder(id, name) } }
-    fun deleteFolder(id: Long) { viewModelScope.launch { galleryRepo.deleteFolder(id) } }
+
+    /** Delete a folder (its notes stay, unfiled) and offer Undo for a few seconds. */
+    fun deleteFolder(id: Long) {
+        viewModelScope.launch {
+            val deleted = galleryRepo.deleteFolderForUndo(id) ?: return@launch
+            notify(
+                UiMessage(
+                    text = "Deleted ${deleted.folder.name}",
+                    actionLabel = "Undo",
+                    onAction = { viewModelScope.launch { galleryRepo.restoreFolder(deleted) } },
+                ),
+            )
+        }
+    }
+
+    /**
+     * Delete a note and offer Undo. The photo file is only removed once the notice has gone
+     * without Undo, and only if no other note uses it.
+     */
+    fun deleteNote(note: SessionEntity) {
+        viewModelScope.launch {
+            galleryRepo.deleteNote(note.sessionId)
+            if (_state.value.sessionId == note.sessionId) _state.update { SolverUiState() }
+            notify(
+                UiMessage(
+                    text = "Deleted the note",
+                    actionLabel = "Undo",
+                    onAction = { viewModelScope.launch { galleryRepo.restoreNote(note) } },
+                    onDismissed = {
+                        viewModelScope.launch(Dispatchers.IO) {
+                            val path = note.imagePath ?: return@launch
+                            if (!galleryRepo.photoInUse(path)) File(path).delete()
+                        }
+                    },
+                ),
+            )
+        }
+    }
 
     fun createFolder(name: String, colorIndex: Int, term: String? = null) {
         viewModelScope.launch { galleryRepo.createFolder(name, colorIndex, term) }
@@ -224,6 +281,9 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(difficulty = difficulty) } // keep the Results stars in sync
         viewModelScope.launch {
             galleryRepo.saveToGallery(id, folderId, title?.ifBlank { null }, difficulty, tags, keepPhoto)
+            val folder = folders.value.firstOrNull { it.folder.id == folderId }?.folder?.name ?: "your gallery"
+            _state.update { it.copy(savedTo = folder) }
+            notify(UiMessage("Saved to $folder"))
             onDone()
         }
     }
@@ -504,6 +564,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                 sessionId = session.sessionId, latex = session.confirmedLatex.ifEmpty { session.recognizedLatex },
                 topic = session.topic, imageFile = session.imagePath?.let(::File),
                 difficulty = session.difficulty,
+                savedTo = session.folderId?.let { id -> folders.value.firstOrNull { it.folder.id == id }?.folder?.name },
                 result = SolveResponse(
                     sessionId = session.sessionId, topic = session.topic, steps = repo.stepsOf(session),
                     answerLatex = session.answerLatex, verified = session.verified ?: false, mismatchAt = session.mismatchAt,

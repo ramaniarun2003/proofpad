@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -103,6 +104,7 @@ fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery
         onExport = { PdfExporter.exportAndShare(ctx, state) },
         onNewProblem = { vm.reset(); onNewProblem() },
         onSaveToGallery = onSaveToGallery,
+        savedTo = state.savedTo,
     )
 }
 
@@ -125,6 +127,7 @@ fun ResultsContent(
     onExport: () -> Unit,
     onNewProblem: () -> Unit,
     onSaveToGallery: (() -> Unit)? = null,
+    savedTo: String? = null,
 ) {
     // A student-chain check: the rows are the student's own lines, each with its own status;
     // our solution (if asked for) is listed separately below, muted.
@@ -361,7 +364,11 @@ fun ResultsContent(
                 border = BorderStroke(1.5.dp, NotepadColors.Ink),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
             ) {
-                Text("＋ Save to gallery", fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Ink)
+                Text(
+                    if (savedTo != null) "Saved to $savedTo ✓  ·  change" else "＋ Save to gallery",
+                    fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Ink,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

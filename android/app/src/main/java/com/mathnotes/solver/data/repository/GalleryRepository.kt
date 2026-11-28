@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.map
  */
 class GalleryRepository(context: Context) {
     private val dao = AppDatabase.get(context.applicationContext).gallery()
+    private val sessions = AppDatabase.get(context.applicationContext).sessions()
 
     // --- Folders ---
     val folders: Flow<List<FolderWithCount>> = dao.foldersWithCounts()
@@ -26,6 +27,27 @@ class GalleryRepository(context: Context) {
 
     /** Deletes the folder; its notes stay, with folderId reset to null. */
     suspend fun deleteFolder(id: Long) = dao.deleteFolder(id)
+
+    /** A deleted folder and the notes that were in it: everything [restoreFolder] needs. */
+    data class DeletedFolder(val folder: FolderEntity, val noteIds: List<String>)
+
+    /** [deleteFolder], returning what is needed to undo it (null if the folder is already gone). */
+    suspend fun deleteFolderForUndo(id: Long): DeletedFolder? {
+        val folder = dao.getFolder(id) ?: return null
+        val noteIds = dao.noteIdsInFolder(id)
+        dao.deleteFolder(id)
+        return DeletedFolder(folder, noteIds)
+    }
+
+    suspend fun restoreFolder(deleted: DeletedFolder) = dao.restoreFolder(deleted.folder, deleted.noteIds)
+
+    /** Delete one note's row. The caller keeps the entity for undo and removes the photo afterwards. */
+    suspend fun deleteNote(id: String) = dao.deleteNotes(listOf(id))
+
+    suspend fun restoreNote(note: SessionEntity) = sessions.upsert(note)
+
+    /** True when some other note still points at [imagePath], so the file must stay. */
+    suspend fun photoInUse(imagePath: String): Boolean = sessions.countWithImage(imagePath) > 0
 
     // --- Note lists ---
     fun notesInFolder(

@@ -1,5 +1,6 @@
 package com.mathnotes.solver.data.db
 
+import androidx.room.OnConflictStrategy
 import androidx.room.Dao
 import androidx.room.Embedded
 import androidx.room.Entity
@@ -94,6 +95,22 @@ interface GalleryDao {
 
     @Query("DELETE FROM folders WHERE id = :id")
     suspend fun deleteFolderRow(id: Long)
+
+    @Query("SELECT * FROM folders WHERE id = :id")
+    suspend fun getFolder(id: Long): FolderEntity?
+
+    @Query("SELECT sessionId FROM sessions WHERE folderId = :id")
+    suspend fun noteIdsInFolder(id: Long): List<String>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putFolder(folder: FolderEntity)
+
+    /** Undo of [deleteFolder]: the folder comes back under its old id and its notes are refiled. */
+    @Transaction
+    suspend fun restoreFolder(folder: FolderEntity, noteIds: List<String>) {
+        putFolder(folder)
+        if (noteIds.isNotEmpty()) moveToFolder(noteIds, folder.id)
+    }
 
     // --- Notes ---
 

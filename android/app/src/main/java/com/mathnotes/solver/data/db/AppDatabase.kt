@@ -73,6 +73,9 @@ interface SessionDao {
 
     @Query("DELETE FROM sessions WHERE sessionId = :id")
     suspend fun delete(id: String)
+
+    @Query("SELECT COUNT(*) FROM sessions WHERE imagePath = :path")
+    suspend fun countWithImage(path: String): Int
 }
 
 /** v1 → v2: add the folders table and the gallery columns on sessions (no data loss). */

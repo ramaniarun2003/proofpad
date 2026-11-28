@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import com.mathnotes.solver.ui.components.NotePressMenu
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -95,6 +96,7 @@ fun FolderDetailScreen(vm: SolverViewModel, onBack: () -> Unit, onOpenNote: () -
         onAddNote = onAddNote,
         onRename = { name -> vm.renameFolder(filter.folderId, name) },
         onDelete = { vm.deleteFolder(filter.folderId); onBack() },
+        onDeleteNote = vm::deleteNote,
     )
 }
 
@@ -117,8 +119,10 @@ fun FolderDetailContent(
     onAddNote: () -> Unit,
     onRename: (String) -> Unit,
     onDelete: () -> Unit,
+    onDeleteNote: ((SessionEntity) -> Unit)? = null,
 ) {
     var showRename by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         // Colored header band.
@@ -155,7 +159,7 @@ fun FolderDetailContent(
                 DiffChip("Medium", Difficulty.MEDIUM, difficultyFilter, onDifficulty)
                 DiffChip("Hard", Difficulty.HARD, difficultyFilter, onDifficulty)
             }
-            FolderOptions(onRename = { showRename = true }, onDelete = onDelete)
+            FolderOptions(onRename = { showRename = true }, onDelete = { confirmDelete = true })
         }
 
         // Grid of note cards (2 columns) + "add" card.
@@ -175,7 +179,7 @@ fun FolderDetailContent(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     pair.forEachIndexed { i, cell ->
                         if (cell == null) AddCard(folderName, onAddNote, Modifier.weight(1f))
-                        else NoteCard(cell, stepCountOf, TILTS[(notes.indexOf(cell)) % TILTS.size], onOpenNote, Modifier.weight(1f))
+                        else NoteCard(cell, stepCountOf, TILTS[(notes.indexOf(cell)) % TILTS.size], onOpenNote, Modifier.weight(1f), onDeleteNote)
                     }
                     if (pair.size == 1) Spacer(Modifier.weight(1f))
                 }
@@ -209,20 +213,47 @@ fun FolderDetailContent(
         }
     }
 
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            containerColor = NotepadColors.Paper,
+            title = { Text("Delete $folderName?", fontFamily = NotepadFonts.PatrickHand, fontSize = 24.sp, color = NotepadColors.Ink) },
+            text = {
+                Text(
+                    if (noteCount == 0) "The folder is empty."
+                    else "Its $noteCount note${if (noteCount == 1) "" else "s"} will stay in My notebook, without a folder.",
+                    fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.Muted,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; onDelete() }) {
+                    Text("Delete folder", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, color = NotepadColors.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("Cancel", fontFamily = NotepadFonts.Inter, color = NotepadColors.Ink) }
+            },
+        )
+    }
     if (showRename) {
         RenameFolderDialog(current = folderName, onDismiss = { showRename = false }, onRename = { onRename(it); showRename = false })
     }
 }
 
 @Composable
-private fun NoteCard(note: SessionEntity, stepCountOf: (SessionEntity) -> Int, tilt: Float, onClick: (SessionEntity) -> Unit, modifier: Modifier) {
+private fun NoteCard(
+    note: SessionEntity, stepCountOf: (SessionEntity) -> Int, tilt: Float, onClick: (SessionEntity) -> Unit, modifier: Modifier,
+    onDelete: ((SessionEntity) -> Unit)? = null,
+) {
     val density = LocalDensity.current
     val flagged = note.verified == false
-    Box(
-        modifier.height(158.dp).graphicsLayer { rotationZ = tilt }.shadow(2.dp)
-            .clip(RoundedCornerShape(6.dp)).background(Color.White).border(1.dp, NotepadColors.HeaderBorder)
-            .clickable { onClick(note) },
+    NotePressMenu(
+        onClick = { onClick(note) },
+        onDelete = onDelete?.let { { it(note) } },
+        modifier = modifier.height(158.dp).graphicsLayer { rotationZ = tilt }.shadow(2.dp)
+            .clip(RoundedCornerShape(6.dp)).background(Color.White).border(1.dp, NotepadColors.HeaderBorder),
     ) {
+      Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(10.dp)) {
             // Problem + answer take the remaining space; an over-tall integral is
             // clipped here rather than pushing the difficulty/tag meta off the card.
@@ -248,6 +279,7 @@ private fun NoteCard(note: SessionEntity, stepCountOf: (SessionEntity) -> Int, t
         }
         CardStamp(flagged, note.mismatchAt, Modifier.align(Alignment.TopEnd).padding(8.dp))  // mismatchAt == null → "ALMOST"
     }
+      }
 }
 
 @Composable

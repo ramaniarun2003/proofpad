@@ -1,5 +1,9 @@
 package com.mathnotes.solver
 
+import com.mathnotes.solver.ui.components.NoticeHost
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Box
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -47,6 +51,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             NotepadTheme {
                 Surface {
+                  Box {
                     val nav = rememberNavController()
                     NavHost(navController = nav, startDestination = start) {
                         composable("welcome") {
@@ -155,6 +160,9 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+                    // Save / delete confirmations and Undo, over whichever screen is showing.
+                    NoticeHost(vm.messages, Modifier.align(Alignment.BottomCenter))
+                  }
                 }
             }
         }
