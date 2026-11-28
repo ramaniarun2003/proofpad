@@ -15,6 +15,7 @@ from ..services import identify, recognition, sandbox
 
 router = APIRouter(tags=["recognize"])
 log = logging.getLogger("proofpad.api")
+NOTHING_TO_READ = "no writing found in the photo"
 
 
 @router.post("/recognize")
@@ -39,6 +40,8 @@ async def recognize(
     if mode == "page":
         try:
             page = await recognition.recognize_page(data, content_type)
+        except recognition.NothingToRead:
+            raise HTTPException(422, NOTHING_TO_READ)
         except recognition.RecognitionError as exc:
             log.warning("page recognition failed: %s", exc)
             raise HTTPException(503, "recognition unavailable")
@@ -60,6 +63,8 @@ async def recognize(
         result = await asyncio.wait_for(recognition.recognize(data, content_type), settings.RECOGNIZE_TIMEOUT_S)
     except asyncio.TimeoutError:
         raise HTTPException(503, "recognition unavailable: timed out")
+    except recognition.NothingToRead:
+        raise HTTPException(422, NOTHING_TO_READ)   # a blank or unreadable photo: the student retakes it
     except recognition.RecognitionError as exc:
         log.warning("recognition failed: %s", exc)   # may quote the recognizer's reply: log only
         raise HTTPException(503, "recognition unavailable")

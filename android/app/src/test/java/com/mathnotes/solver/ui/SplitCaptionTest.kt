@@ -119,5 +119,8 @@ class SplitCaptionTest {
             }
         }
         assertEquals(PARSE_ERROR_NOTE, failureNote(http(422, "x")))
+        // A blank photo (the recognizer found nothing) asks for a retake, not a wait.
+        assertEquals(NOTHING_TO_READ_NOTE, recognizeFailureNote(http(422, """{"detail":"no writing found in the photo"}""")))
+        assertEquals(READER_DOWN_NOTE, recognizeFailureNote(http(503, "x")))
     }
 }

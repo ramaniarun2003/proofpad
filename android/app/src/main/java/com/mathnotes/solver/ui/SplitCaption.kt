@@ -28,8 +28,11 @@ fun recognizeFailureNote(e: Throwable): String = when {
     e is java.io.IOException -> CANT_REACH_NOTE
     e is retrofit2.HttpException && e.code() == 413 -> PHOTO_TOO_LARGE_NOTE
     e is retrofit2.HttpException && e.code() == 503 -> READER_DOWN_NOTE
+    e is retrofit2.HttpException && e.code() == 422 -> NOTHING_TO_READ_NOTE
     else -> SOLVER_TROUBLE_NOTE
 }
+
+const val NOTHING_TO_READ_NOTE = "I couldn't find any writing in that photo. Retake it with the problem inside the box."
 
 const val READER_DOWN_NOTE = "I can't read handwriting right now. Try again in a minute. Your photo is kept."
 

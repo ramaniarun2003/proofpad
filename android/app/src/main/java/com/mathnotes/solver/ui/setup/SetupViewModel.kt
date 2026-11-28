@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui.setup
 
+import com.mathnotes.solver.ui.NOTHING_TO_READ_NOTE
 import com.mathnotes.solver.ui.failureNote
 import android.app.Application
 import android.graphics.Bitmap
@@ -140,7 +141,7 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 _state.update { it.copy(busy = false, status = "") }
                 Timber.w(e, "setup page recognition failed")
-                _events.emit(SetupEvent.Error(failureNote(e)))
+                _events.emit(SetupEvent.Error(if (e is retrofit2.HttpException && e.code() == 422) NOTHING_TO_READ_NOTE else failureNote(e)))
             }
         }
     }
@@ -173,7 +174,7 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 _state.update { it.copy(busy = false, status = "") }
                 Timber.w(e, "setup line retake failed")
-                _events.emit(SetupEvent.Error(failureNote(e)))
+                _events.emit(SetupEvent.Error(if (e is retrofit2.HttpException && e.code() == 422) NOTHING_TO_READ_NOTE else failureNote(e)))
             }
         }
     }

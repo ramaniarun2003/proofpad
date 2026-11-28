@@ -118,3 +118,23 @@ def test_recognize_gives_up_on_a_slow_recognizer(client, monkeypatch, tmp_path):
     r = client.post("/recognize", files={"image": ("a.jpg", b"\xff\xd8fake", "image/jpeg")})
     assert (r.status_code, r.json()) == (503, {"detail": "recognition unavailable: timed out"})
     assert time.monotonic() - started < 3
+
+
+def test_a_photo_with_no_writing_is_not_reported_as_an_outage(client, monkeypatch, tmp_path):
+    """Mathpix answers a blank photo with {"error": "Content not found"}: a retake, not a 503."""
+    async def post(self, url, json=None, headers=None, **kw):
+        return httpx.Response(200, json={"error": "Content not found"}, request=httpx.Request("POST", url))
+
+    _mathpix(monkeypatch, tmp_path, post)
+    for mode in ("formula", "page"):
+        r = client.post("/recognize", data={"mode": mode}, files={"image": ("a.jpg", b"\xff\xd8fake", "image/jpeg")})
+        assert (r.status_code, r.json()) == (422, {"detail": "no writing found in the photo"})
+
+
+def test_other_recognizer_errors_are_still_503_without_their_text(client, monkeypatch, tmp_path):
+    async def post(self, url, json=None, headers=None, **kw):
+        return httpx.Response(200, json={"error": "Monthly quota exceeded for app_id x"}, request=httpx.Request("POST", url))
+
+    _mathpix(monkeypatch, tmp_path, post)
+    r = client.post("/recognize", files={"image": ("a.jpg", b"\xff\xd8fake", "image/jpeg")})
+    assert (r.status_code, r.json()) == (503, {"detail": "recognition unavailable"})
