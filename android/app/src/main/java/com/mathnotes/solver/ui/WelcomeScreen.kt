@@ -259,7 +259,7 @@ private fun TitleLabel(labelIn: Float, stampScale: Float, stampAlpha: Float) {
                     color = NotepadColors.Ink,
                 )
                 Spacer(Modifier.weight(1f))
-                Text("derivatives · integrals · series", fontFamily = NotepadFonts.PatrickHand, fontSize = 16.sp, color = NotepadColors.Muted)
+                Text("derivatives · integrals · series · limits", fontFamily = NotepadFonts.PatrickHand, fontSize = 16.sp, color = NotepadColors.Muted)
                 Text("solved and checked, step by step", fontFamily = NotepadFonts.PatrickHand, fontSize = 16.sp, color = NotepadColors.Muted)
             }
         }
