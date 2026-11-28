@@ -10,7 +10,7 @@
 @font-face{font-family:'Inter';font-weight:400;src:url(fonts/inter-latin-400-normal.woff2) format('woff2')}
 @font-face{font-family:'Inter';font-weight:500;src:url(fonts/inter-latin-500-normal.woff2) format('woff2')}
 @font-face{font-family:'Inter';font-weight:600;src:url(fonts/inter-latin-600-normal.woff2) format('woff2')}
-@font-face{font-family:'JetBrains Mono';src:url(fonts/jetbrains-mono-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Inter';font-weight:700;src:url(fonts/inter-latin-700-normal.woff2) format('woff2')}
 </style>
 <style>
 body{margin:0}
@@ -27,7 +27,7 @@ a{color:#5b4b2a}a:hover{color:#2f2610}
     <div style="font-family: 'Patrick Hand', cursive; font-size: 17px; color: #7a6a4a">step 1 of 3</div>
   </div>
 
-  <div style="position: absolute; top: 130px; left: 60px; right: 20px; height: 400px">
+  <div style="position: absolute; top: 112px; left: 60px; right: 20px; height: 400px; transform: scale(0.88); transform-origin: top left">
     <div style="position: absolute; top: 20px; left: 30px; width: 200px; height: 360px; border-radius: 22px; background: #1b1915; box-shadow: 0 10px 24px rgba(0,0,0,0.25); overflow: hidden">
       <div style="position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, #5c554a 0%, #3a352d 55%, #1b1915 100%)"></div>
       <div style="position: absolute; top: 70px; left: 16px; width: 168px; height: 210px; transform: rotate(-3deg); background: #ece6d6; background-image: repeating-linear-gradient(180deg, transparent 0px, transparent 17px, #c9d7e6 17px, #c9d7e6 18px); box-shadow: 0 6px 14px rgba(0,0,0,0.4)"></div>
@@ -42,16 +42,20 @@ a{color:#5b4b2a}a:hover{color:#2f2610}
         <span style="padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.5); font-family: 'Patrick Hand', cursive; font-size: 10px; color: #fbf8f1">Integral</span>
       </div>
     </div>
-    <div style="position: absolute; top: 60px; left: 196px; width: 104px; transform: rotate(3deg); background: #fff3a3; box-shadow: 2px 3px 8px rgba(60,40,0,0.18); padding: 8px 10px; font-family: 'Patrick Hand', cursive; font-size: 13px; line-height: 16px; color: #4a3d1e">the yellow box is what I read. One problem, with your work after the =</div>
+    <div style="position: absolute; top: 60px; left: 196px; width: 104px; transform: rotate(3deg); background: #fff3a3; box-shadow: 2px 3px 8px rgba(60,40,0,0.18); padding: 8px 10px; font-family: 'Patrick Hand', cursive; font-size: 13px; line-height: 16px; color: #4a3d1e">Only what is inside the yellow box gets read</div>
     <svg style="position: absolute; top: 150px; left: 196px" width="40" height="30" viewBox="0 0 40 30" fill="none" stroke="#2a2419" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="arrow to guide box"><path d="M36 6c-10 2-20 8-30 16"/><path d="M12 16l-6 6 8 2"/></svg>
-    <div style="position: absolute; top: 316px; left: 196px; width: 104px; transform: rotate(-2deg); background: #fff3a3; box-shadow: 2px 3px 8px rgba(60,40,0,0.18); padding: 8px 10px; font-family: 'Patrick Hand', cursive; font-size: 13px; line-height: 16px; color: #4a3d1e">tap the shutter, or pick a photo from your gallery</div>
+    <div style="position: absolute; top: 316px; left: 196px; width: 104px; transform: rotate(-2deg); background: #fff3a3; box-shadow: 2px 3px 8px rgba(60,40,0,0.18); padding: 8px 10px; font-family: 'Patrick Hand', cursive; font-size: 13px; line-height: 16px; color: #4a3d1e">Tap the round button to take the photo</div>
     <svg style="position: absolute; top: 340px; left: 170px" width="46" height="24" viewBox="0 0 46 24" fill="none" stroke="#2a2419" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="arrow to shutter"><path d="M44 6c-12 0-24 6-38 12"/><path d="M12 12l-6 6 8 2"/></svg>
   </div>
 
-  <div style="position: absolute; top: 546px; left: 60px; right: 20px; font-family: 'Patrick Hand', cursive; font-size: 32px; line-height: 38px; color: #2a2419">Snap one problem</div>
-  <div style="position: absolute; top: 596px; left: 60px; right: 24px; font-family: 'Patrick Hand', cursive; font-size: 18px; line-height: 24px; color: #4a3d1e">Write the problem and your working in your notebook, line it up in the yellow box, and tap the shutter. Auto picks the topic for you; the chips let you choose.</div>
+  <div style="position: absolute; top: 500px; left: 60px; right: 20px; font-family: 'Patrick Hand', cursive; font-size: 30px; line-height: 36px; color: #2a2419">Take a photo of one problem</div>
+  <div style="position: absolute; top: 544px; left: 60px; right: 24px; font-family: 'Patrick Hand', cursive; font-size: 17px; line-height: 23px; color: #4a3d1e">Write the problem and your answer in your notebook. Put it inside the yellow box and tap the round button.</div>
 
-  <div style="position: absolute; top: 722px; left: 60px; display: flex; gap: 8px; align-items: center">
+  <div style="position: absolute; top: 622px; left: 60px; right: 24px; border: 1.5px solid #2a2419; border-radius: 160px 10px 150px 10px / 10px 150px 10px 160px; padding: 8px 14px; box-sizing: border-box; font-family: 'Patrick Hand', cursive; font-size: 15px; line-height: 20px; color: #2a2419">
+    <span style="color: #1f7a3a">&#10003;</span> Works with calculus: derivatives, integrals, limits, series, partial derivatives<br>
+    <span style="color: #c0392b">&#10007;</span> Not for word problems, proofs, or algebra on its own
+  </div>
+  <div style="position: absolute; top: 726px; left: 60px; display: flex; gap: 8px; align-items: center">
     <div style="width: 26px; height: 8px; border-radius: 4px; background: #2a2419"></div>
     <div style="width: 8px; height: 8px; border-radius: 4px; background: #c9bda4"></div>
     <div style="width: 8px; height: 8px; border-radius: 4px; background: #c9bda4"></div>

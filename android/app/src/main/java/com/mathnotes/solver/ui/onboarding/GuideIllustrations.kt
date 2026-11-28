@@ -64,6 +64,7 @@ import kotlin.math.sin
  * screenshots, so they follow the theme. Each is a 200x360dp "mini phone": the screen inside is
  * laid out at a 360x648dp design size with the real components (Stamp, StepRow, StickyNote,
  * HandDrawnBox, LatexView) and scaled down as a whole. Two sticky-note callouts sit beside it.
+ * A screen reader gets one description of each picture, then the callouts as ordinary text.
  */
 
 internal val ILLUSTRATION_HEIGHT = 384.dp
@@ -80,14 +81,15 @@ private val NOTE_W = 150.dp
 
 /** The rounded phone body with [screen] drawn inside at the design size, scaled to fit. */
 @Composable
-private fun BoxScope.MiniPhone(background: Color, screen: @Composable BoxScope.() -> Unit) {
+private fun BoxScope.MiniPhone(background: Color, description: String, screen: @Composable BoxScope.() -> Unit) {
     Box(
         Modifier
             .offset(PHONE_X, PHONE_Y)
             .shadow(10.dp, RoundedCornerShape(22.dp))
             .size(PHONE_W, PHONE_H)
             .clip(RoundedCornerShape(22.dp))
-            .background(background),
+            .background(background)
+            .clearAndSetSemantics { contentDescription = description },
     ) {
         Box(
             Modifier
@@ -103,7 +105,7 @@ private fun BoxScope.MiniPhone(background: Color, screen: @Composable BoxScope.(
 @Composable
 private fun BoxScope.Callout(text: String, y: Dp, tilt: Float) {
     StickyNote(Modifier.offset(NOTE_X, y).width(NOTE_W), rotationDeg = tilt) {
-        Text(text, fontFamily = NotepadFonts.PatrickHand, fontSize = 13.sp, lineHeight = 17.sp, color = NotepadColors.NoteInkYellow)
+        Text(text, fontFamily = NotepadFonts.PatrickHand, fontSize = 13.sp, lineHeight = 16.sp, color = NotepadColors.NoteInkYellow)
     }
 }
 
@@ -150,12 +152,12 @@ private fun BarButton(label: String, filled: Boolean, modifier: Modifier) {
 }
 
 @Composable
-private fun BoxScope.BottomBar(left: String, right: String) {
+private fun BoxScope.BottomBar(left: String, right: String, rightWeight: Float = 1.4f) {
     Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(NotepadColors.HeaderBand)) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(NotepadColors.HeaderBorder))
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             BarButton(left, filled = false, modifier = Modifier.weight(1f))
-            BarButton(right, filled = true, modifier = Modifier.weight(1.4f))
+            BarButton(right, filled = true, modifier = Modifier.weight(rightWeight))
         }
     }
 }
@@ -178,12 +180,11 @@ private fun ScreenHeader(title: String, trailing: String? = null) {
 
 @Composable
 internal fun BoxScope.SnapIllustration() {
-    Box(
-        Modifier.matchParentSize().clearAndSetSemantics {
-            contentDescription = "Picture of the camera screen: a handwritten problem lined up inside a yellow box, topic chips, and the shutter button."
-        },
-    ) {
-        MiniPhone(NotepadColors.CaptureVignetteOuter) {
+    Box(Modifier.matchParentSize()) {
+        MiniPhone(
+            NotepadColors.CaptureVignetteOuter,
+            "Picture of the camera screen: a handwritten problem lined up inside a yellow box, topic chips, and the shutter button.",
+        ) {
             // The dark viewfinder.
             Box(
                 Modifier.matchParentSize().background(
@@ -214,7 +215,7 @@ internal fun BoxScope.SnapIllustration() {
                 Box(Modifier.graphicsLayer { rotationZ = -2f }) { Math("""\int 2x\,dx = x^{2} + C""", 30) }
             }
             Text(
-                "hold still",
+                "page found · hold still",
                 Modifier.align(Alignment.TopCenter).offset(y = 356.dp),
                 fontFamily = NotepadFonts.PatrickHand, fontSize = 20.sp, color = NotepadColors.CaptureCaption,
             )
@@ -235,9 +236,9 @@ internal fun BoxScope.SnapIllustration() {
                 contentAlignment = Alignment.Center,
             ) { Box(Modifier.size(66.dp).clip(CircleShape).background(NotepadColors.Paper)) }
         }
-        Callout("the yellow box is what I read. One problem, with your work after the =", y = 44.dp, tilt = 3f)
+        Callout("Only what is inside the yellow box gets read", y = 44.dp, tilt = 3f)
         HandArrow(from = 236.dp to 148.dp, to = 194.dp to 166.dp)
-        Callout("tap the shutter, or pick a photo from your gallery", y = 296.dp, tilt = -2f)
+        Callout("Tap the round button to take the photo", y = 296.dp, tilt = -2f)
         HandArrow(from = 182.dp to 322.dp, to = 138.dp to 328.dp, bow = (-6).dp)
     }
 }
@@ -246,12 +247,11 @@ internal fun BoxScope.SnapIllustration() {
 
 @Composable
 internal fun BoxScope.CheckIllustration() {
-    Box(
-        Modifier.matchParentSize().clearAndSetSemantics {
-            contentDescription = "Picture of the results screen: a verified stamp, a checked step with its rule, the answer in a box, and a note about a wrong step."
-        },
-    ) {
-        MiniPhone(NotepadColors.Paper) {
+    Box(Modifier.matchParentSize()) {
+        MiniPhone(
+            NotepadColors.Paper,
+            "Picture of the results screen: a verified stamp, a checked step with its rule, the answer in a box, and a note about a wrong step.",
+        ) {
             Column(Modifier.matchParentSize()) {
                 ScreenHeader("ProofPad")
                 Column(Modifier.weight(1f).fillMaxWidth().ruledPaper().padding(start = 56.dp, end = 16.dp, top = 10.dp)) {
@@ -279,11 +279,11 @@ internal fun BoxScope.CheckIllustration() {
                     }
                 }
             }
-            BottomBar("Export PDF", "New problem")
+            BottomBar("Export PDF", "New problem", rightWeight = 1f)
         }
-        Callout("first I show what I read. Fix the LaTeX if I got a symbol wrong, then tap Check my steps", y = 30.dp, tilt = 2f)
-        Callout("every step gets a ✓ or ✗, tap one to see the rule", y = 236.dp, tilt = -1.5f)
-        HandArrow(from = 184.dp to 262.dp, to = 150.dp to 224.dp, bow = 6.dp)
+        Callout("First you see what was read. Fix any wrong symbol, then tap Check my steps", y = 30.dp, tilt = 2f)
+        Callout("Green check: this line is right. Red X: something is off", y = 236.dp, tilt = -1.5f)
+        HandArrow(from = 192.dp to 238.dp, to = 183.dp to 172.dp, bow = 2.dp)
     }
 }
 
@@ -291,12 +291,11 @@ internal fun BoxScope.CheckIllustration() {
 
 @Composable
 internal fun BoxScope.SaveIllustration() {
-    Box(
-        Modifier.matchParentSize().clearAndSetSemantics {
-            contentDescription = "Picture of the gallery: three class folders, recently viewed notes marked easy, medium and hard, and this week's notes."
-        },
-    ) {
-        MiniPhone(NotepadColors.Paper) {
+    Box(Modifier.matchParentSize()) {
+        MiniPhone(
+            NotepadColors.Paper,
+            "Picture of the gallery: three class folders, recently viewed notes marked easy, medium and hard, and this week's notes.",
+        ) {
             Column(Modifier.matchParentSize()) {
                 ScreenHeader("Gallery", "23 notes")
                 Column(Modifier.weight(1f).fillMaxWidth().ruledPaper().padding(start = 56.dp, end = 12.dp, top = 12.dp)) {
@@ -353,10 +352,10 @@ internal fun BoxScope.SaveIllustration() {
                     }
                 }
             }
-            BottomBar("Settings", "Snap a problem")
+            BottomBar("Settings", "Take a photo")
         }
-        Callout("after a solve, tap Save to gallery: pick a class folder and rate it Easy / Medium / Hard", y = 16.dp, tilt = 2f)
-        HandArrow(from = 184.dp to 122.dp, to = 150.dp to 112.dp, bow = 6.dp)
-        Callout("find notes by class, by week, or search. Export any note as a PDF before an exam", y = 246.dp, tilt = -2f)
+        Callout("Tap Save to put the problem in a folder for your class", y = 16.dp, tilt = 2f)
+        HandArrow(from = 224.dp to 92.dp, to = 197.dp to 110.dp, bow = 6.dp)
+        Callout("Before a test, open a folder or export it as one PDF", y = 246.dp, tilt = -2f)
     }
 }

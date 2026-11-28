@@ -12,7 +12,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -37,6 +41,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -46,38 +60,53 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mathnotes.solver.ui.components.CheckIcon
+import com.mathnotes.solver.ui.components.CrossIcon
 import com.mathnotes.solver.ui.components.NotepadBottomBar
 import com.mathnotes.solver.ui.components.ruledPaper
 import com.mathnotes.solver.ui.theme.NotepadColors
 import com.mathnotes.solver.ui.theme.NotepadFonts
 import kotlinx.coroutines.launch
 
-/** One page of the guide: its words, and which illustration goes with them. */
-private data class GuidePage(val headline: String, val body: String, val illustration: @Composable BoxScope.() -> Unit)
+/** One page of the guide: its words, its picture, and what goes under the words. */
+private data class GuidePage(
+    val headline: String,
+    val body: String,
+    /** The first page has the scope box to fit in as well, so its picture is drawn a little smaller. */
+    val illustrationScale: Float = 1f,
+    val illustration: @Composable BoxScope.() -> Unit,
+    val below: @Composable () -> Unit,
+)
 
 private val PAGES = listOf(
     GuidePage(
-        "Snap one problem",
-        "Write the problem and your working in your notebook, line it up in the yellow box, and tap the shutter. " +
-            "Auto picks the topic for you; the chips let you choose.",
-    ) { SnapIllustration() },
+        "Take a photo of one problem",
+        "Write the problem and your answer in your notebook. Put it inside the yellow box and tap the round button.",
+        illustrationScale = 0.88f,
+        illustration = { SnapIllustration() },
+        below = { ScopeBox() },
+    ),
     GuidePage(
-        "I check every step",
-        "I read your handwriting, you confirm it, then each line of your work gets a check or an X with the rule it used. " +
-            "Wrong step? I say which one and why, and I can show the full solution.",
-    ) { CheckIllustration() },
+        "See which steps are right",
+        "Each line of your work gets a green check or a red X. If a line is wrong, a short note says why, " +
+            "and you can see the full worked solution.",
+        illustration = { CheckIllustration() },
+        below = { Footnote("If a symbol was misread, tap the text to fix it before you check.") },
+    ),
     GuidePage(
-        "Keep it in your notebook",
-        "Save solved problems into class folders, rate how hard they were, and find them again by week or by search. " +
-            "Export any note as a PDF when it is time to study.",
-    ) { SaveIllustration() },
+        "Save it for later",
+        "Keep solved problems in a folder for each class and mark them Easy, Medium or Hard. " +
+            "Find them again by class, by week, or by searching.",
+        illustration = { SaveIllustration() },
+        below = { Footnote("Everything stays on your phone. Nothing is shared.") },
+    ),
 )
 
 /**
  * The one-time three-page guide between the notebook cover and the handwriting setup wizard
- * (mockups 11_guide_1_snap / 2_check / 3_save). Swipe or use the buttons. Skip on any page, and
- * the last page's button, go on to the wizard ([onToSetup]); Back on the first page returns to
- * the cover ([onToCover]).
+ * (mockups 11_guide_1_snap / 2_check / 3_save). Swipe or use the buttons. Skip on pages 1 and 2,
+ * and the last page's button, go on to the wizard ([onToSetup]); Back on the first page returns
+ * to the cover ([onToCover]).
  *
  * The page is kept across process death (the pager state is saveable), and with animations
  * turned off in system settings the buttons change page without sliding.
@@ -166,18 +195,33 @@ private fun GuidePageContent(index: Int, page: GuidePage, onSkip: () -> Unit) {
         }
 
         Spacer(Modifier.height(14.dp))
-        Box(Modifier.fillMaxWidth().height(ILLUSTRATION_HEIGHT)) { page.illustration(this) }
+        // The picture is laid out at its full size and scaled from its top left corner.
+        Box(Modifier.fillMaxWidth().height(ILLUSTRATION_HEIGHT * page.illustrationScale)) {
+            Box(
+                Modifier
+                    .wrapContentHeight(align = Alignment.Top, unbounded = true)
+                    .fillMaxWidth()
+                    .requiredHeight(ILLUSTRATION_HEIGHT)
+                    .graphicsLayer {
+                        scaleX = page.illustrationScale; scaleY = page.illustrationScale
+                        transformOrigin = TransformOrigin(0f, 0f)
+                    },
+            ) { page.illustration(this) }
+        }
         Spacer(Modifier.height(16.dp))
 
         Text(
             page.headline,
             Modifier.semantics { heading() },
-            fontFamily = NotepadFonts.PatrickHand, fontSize = 32.sp, lineHeight = 38.sp, color = NotepadColors.Ink,
+            fontFamily = NotepadFonts.PatrickHand, fontSize = 30.sp, lineHeight = 36.sp, color = NotepadColors.Ink,
         )
-        Spacer(Modifier.height(10.dp))
-        Text(page.body, fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, lineHeight = 24.sp, color = NotepadColors.NoteInkYellow)
+        Spacer(Modifier.height(8.dp))
+        Text(page.body, fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, lineHeight = 23.sp, color = NotepadColors.NoteInkYellow)
 
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(14.dp))
+        page.below()
+
+        Spacer(Modifier.height(16.dp))
         // Page dots: a 26x8 ink pill for this page, 8dp dots for the others.
         Row(
             Modifier.semantics { contentDescription = "Page ${index + 1} of ${Onboarding.GUIDE_PAGES}" },
@@ -192,5 +236,55 @@ private fun GuidePageContent(index: Int, page: GuidePage, onSkip: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+/**
+ * Page 1: what the app is for and what it is not, in a hand-drawn outline (the mockup's uneven
+ * corners: long and shallow on one side of each, short and deep on the other).
+ */
+@Composable
+private fun ScopeBox() {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                val stroke = 1.5.dp.toPx()
+                val outline = RoundRect(
+                    rect = Rect(Offset.Zero, size).deflate(stroke / 2),
+                    topLeft = CornerRadius(160.dp.toPx(), 10.dp.toPx()),
+                    topRight = CornerRadius(10.dp.toPx(), 150.dp.toPx()),
+                    bottomRight = CornerRadius(150.dp.toPx(), 10.dp.toPx()),
+                    bottomLeft = CornerRadius(10.dp.toPx(), 160.dp.toPx()),
+                )
+                drawPath(Path().apply { addRoundRect(outline) }, NotepadColors.Ink, style = Stroke(width = stroke))
+            }
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    ) {
+        ScopeLine(works = true, "Works with calculus: derivatives, integrals, limits, series, partial derivatives")
+        ScopeLine(works = false, "Not for word problems, proofs, or algebra on its own")
+    }
+}
+
+@Composable
+private fun ScopeLine(works: Boolean, text: String) {
+    Row {
+        Box(Modifier.padding(top = 3.dp)) {
+            if (works) CheckIcon(NotepadColors.Green, 14.dp) else CrossIcon(NotepadColors.Red, 14.dp)
+        }
+        Spacer(Modifier.width(6.dp))
+        Text(text, fontFamily = NotepadFonts.PatrickHand, fontSize = 15.sp, lineHeight = 20.sp, color = NotepadColors.Ink)
+    }
+}
+
+private val FootnoteAmber = Color(0xFFE0A000)
+
+/** Pages 2 and 3: one muted line of small print with an amber bar down its left. */
+@Composable
+private fun Footnote(text: String) {
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        Box(Modifier.width(4.dp).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(FootnoteAmber))
+        Spacer(Modifier.width(8.dp))
+        Text(text, fontFamily = NotepadFonts.PatrickHand, fontSize = 15.sp, lineHeight = 19.sp, color = NotepadColors.Muted)
     }
 }

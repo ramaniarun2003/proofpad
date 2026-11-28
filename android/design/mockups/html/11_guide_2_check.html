@@ -10,7 +10,7 @@
 @font-face{font-family:'Inter';font-weight:400;src:url(fonts/inter-latin-400-normal.woff2) format('woff2')}
 @font-face{font-family:'Inter';font-weight:500;src:url(fonts/inter-latin-500-normal.woff2) format('woff2')}
 @font-face{font-family:'Inter';font-weight:600;src:url(fonts/inter-latin-600-normal.woff2) format('woff2')}
-@font-face{font-family:'JetBrains Mono';src:url(fonts/jetbrains-mono-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Inter';font-weight:700;src:url(fonts/inter-latin-700-normal.woff2) format('woff2')}
 </style>
 <style>
 body{margin:0}
@@ -44,15 +44,16 @@ a{color:#5b4b2a}a:hover{color:#2f2610}
         <div style="flex: 1; background: #2a2419; color: #fbf8f1; border-radius: 6px; font-size: 8px; display: flex; align-items: center; justify-content: center">New problem</div>
       </div>
     </div>
-    <div style="position: absolute; top: 40px; left: 196px; width: 104px; transform: rotate(3deg); background: #fff3a3; box-shadow: 2px 3px 8px rgba(60,40,0,0.18); padding: 8px 10px; font-family: 'Patrick Hand', cursive; font-size: 13px; line-height: 16px; color: #4a3d1e">first I show what I read. Fix the LaTeX if I got a symbol wrong, then tap Check my steps</div>
-    <div style="position: absolute; top: 200px; left: 196px; width: 104px; transform: rotate(-2deg); background: #fff3a3; box-shadow: 2px 3px 8px rgba(60,40,0,0.18); padding: 8px 10px; font-family: 'Patrick Hand', cursive; font-size: 13px; line-height: 16px; color: #4a3d1e">every step gets a &#10003; or &#10007;, tap one to see the rule</div>
+    <div style="position: absolute; top: 40px; left: 196px; width: 104px; transform: rotate(3deg); background: #fff3a3; box-shadow: 2px 3px 8px rgba(60,40,0,0.18); padding: 8px 10px; font-family: 'Patrick Hand', cursive; font-size: 13px; line-height: 16px; color: #4a3d1e">First you see what was read. Fix any wrong symbol, then tap Check my steps</div>
+    <div style="position: absolute; top: 200px; left: 196px; width: 104px; transform: rotate(-2deg); background: #fff3a3; box-shadow: 2px 3px 8px rgba(60,40,0,0.18); padding: 8px 10px; font-family: 'Patrick Hand', cursive; font-size: 13px; line-height: 16px; color: #4a3d1e">Green check: this line is right. Red X: something is off</div>
     <svg style="position: absolute; top: 236px; left: 180px" width="36" height="20" viewBox="0 0 36 20" fill="none" stroke="#2a2419" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="arrow to steps"><path d="M34 4c-10 2-18 6-28 10"/><path d="M12 8l-6 6 8 2"/></svg>
   </div>
 
-  <div style="position: absolute; top: 546px; left: 60px; right: 20px; font-family: 'Patrick Hand', cursive; font-size: 32px; line-height: 38px; color: #2a2419">I check every step</div>
-  <div style="position: absolute; top: 596px; left: 60px; right: 24px; font-family: 'Patrick Hand', cursive; font-size: 18px; line-height: 24px; color: #4a3d1e">I read your handwriting, you confirm it, then each line of your work gets a check or an X with the rule it used. Wrong step? I say which one and why, and I can show the full solution.</div>
+  <div style="position: absolute; top: 540px; left: 60px; right: 20px; font-family: 'Patrick Hand', cursive; font-size: 30px; line-height: 36px; color: #2a2419">See which steps are right</div>
+  <div style="position: absolute; top: 584px; left: 60px; right: 24px; font-family: 'Patrick Hand', cursive; font-size: 17px; line-height: 23px; color: #4a3d1e">Each line of your work gets a green check or a red X. If a line is wrong, a short note says why, and you can see the full worked solution.</div>
 
-  <div style="position: absolute; top: 722px; left: 60px; display: flex; gap: 8px; align-items: center">
+  <div style="position: absolute; top: 684px; left: 60px; right: 24px; display: flex; gap: 8px; align-items: flex-start"><div style="width: 4px; align-self: stretch; background: #e0a000; border-radius: 2px"></div><div style="font-family: 'Patrick Hand', cursive; font-size: 15px; line-height: 19px; color: #7a6a4a">If a symbol was misread, tap the text to fix it before you check.</div></div>
+  <div style="position: absolute; top: 728px; left: 60px; display: flex; gap: 8px; align-items: center">
     <div style="width: 8px; height: 8px; border-radius: 4px; background: #c9bda4"></div>
     <div style="width: 26px; height: 8px; border-radius: 4px; background: #2a2419"></div>
     <div style="width: 8px; height: 8px; border-radius: 4px; background: #c9bda4"></div>

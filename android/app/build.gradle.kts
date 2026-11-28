@@ -112,6 +112,9 @@ dependencies {
     // Compose UI tests (the first-launch flow). The BOM pins the version.
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    // ui-test-junit4 brings Espresso 3.5, which cannot run on Android 16 and later (it calls the
+    // removed InputManager.getInstance); 3.7 can.
+    androidTestImplementation(libs.androidx.test.espresso.core)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 

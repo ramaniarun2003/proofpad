@@ -7,6 +7,7 @@ import com.mathnotes.solver.ui.failureNote
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mathnotes.solver.data.WelcomePrefs
@@ -149,6 +150,18 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
                 _events.emit(SetupEvent.Error(if (e is retrofit2.HttpException && e.code() == 422) NOTHING_TO_READ_NOTE else failureNote(e)))
             }
         }
+    }
+
+    /**
+     * Test seam: stands in for a page read that found all five lines as written, so a UI test can
+     * finish the wizard without a camera or a backend.
+     */
+    @VisibleForTesting
+    internal fun deliverPageReadForTest() {
+        _state.update { s ->
+            s.copy(busy = false, status = "", lines = s.lines.map { it.copy(recognizedLatex = it.expectedLatex, confidence = 1f, notFound = false) })
+        }
+        _events.tryEmit(SetupEvent.Recognized)
     }
 
     private var retakeIndex: Int = -1

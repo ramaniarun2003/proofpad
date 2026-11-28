@@ -2,6 +2,9 @@ package com.mathnotes.solver
 
 import com.mathnotes.solver.ui.onboarding.Onboarding
 import com.mathnotes.solver.ui.onboarding.GuideScreen
+import com.mathnotes.solver.ui.onboarding.WelcomeScreen
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.mathnotes.solver.ui.UiMessage
 import com.mathnotes.solver.ui.components.NoticeHost
 import androidx.compose.ui.Modifier
@@ -29,7 +32,6 @@ import com.mathnotes.solver.ui.ReviewScreen
 import com.mathnotes.solver.ui.SaveToGalleryScreen
 import com.mathnotes.solver.ui.SettingsScreen
 import com.mathnotes.solver.ui.SolverViewModel
-import com.mathnotes.solver.ui.WelcomeScreen
 import com.mathnotes.solver.ui.setup.SetupCheckScreen
 import com.mathnotes.solver.ui.setup.SetupDoneScreen
 import com.mathnotes.solver.ui.setup.SetupEvent
@@ -37,7 +39,7 @@ import com.mathnotes.solver.ui.setup.SetupViewModel
 import com.mathnotes.solver.ui.setup.SetupWriteScreen
 import com.mathnotes.solver.ui.theme.NotepadTheme
 
-/** Navigation: welcome → handwriting setup wizard → capture → review → results, plus history and settings. */
+/** Navigation: welcome → guide → handwriting setup wizard → capture → review → results, plus history and settings. */
 class MainActivity : ComponentActivity() {
     private val vm: SolverViewModel by viewModels()
     private val setupVm: SetupViewModel by viewModels()
@@ -59,13 +61,18 @@ class MainActivity : ComponentActivity() {
                     NavHost(navController = nav, startDestination = start) {
                         composable("welcome") {
                             // The cover stays on the back stack so Back from the guide's first page returns to it.
-                            WelcomeScreen(onGetStarted = { nav.navigate("guide") })
+                            // The label carries the newest class folder's name, once there is one.
+                            val folders by vm.folders.collectAsState()
+                            WelcomeScreen(
+                                folderName = folders.maxByOrNull { it.folder.createdAt }?.folder?.name,
+                                onGetStarted = { nav.navigate("guide") },
+                            )
                         }
                         // --- The one-time three-page guide ---
                         composable("guide") {
                             GuideScreen(
                                 onToCover = { nav.popBackStack("welcome", inclusive = false) },
-                                // Skip on any page, or the last page's button: on to the wizard, leaving
+                                // Skip on pages 1 and 2, or the last page's button: on to the wizard, leaving
                                 // the cover and the guide behind.
                                 onToSetup = { nav.navigate("setupWrite") { popUpTo("welcome") { inclusive = true } } },
                             )
