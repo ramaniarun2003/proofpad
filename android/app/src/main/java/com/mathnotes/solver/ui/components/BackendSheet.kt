@@ -77,7 +77,7 @@ fun BackendStatusChip(state: BackendState, onClick: () -> Unit, modifier: Modifi
             Modifier.size(9.dp).graphicsLayer { this.alpha = alpha }.clip(RoundedCornerShape(999.dp)).background(dotColor(state)),
         ) {}
         Text(
-            "backend",
+            "solver",
             fontFamily = NotepadFonts.PatrickHand, fontSize = 15.sp, color = if (onPaper) NotepadColors.Ink else NotepadColors.Paper,
         )
     }
@@ -93,7 +93,11 @@ fun BackendSheet(
     onScanQr: () -> Unit,
     onSaveUrl: (String) -> Boolean,
     onDismiss: () -> Unit,
+    onUseDefault: (() -> Unit)? = null,
 ) {
+    // Most people never set an address: the app uses its hosted solver. [savedUrl] is only
+    // non-blank for someone running their own.
+    val ownAddress = savedUrl.isNotBlank()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var url by remember { mutableStateOf(savedUrl) }
     var invalid by remember { mutableStateOf(false) }
@@ -103,15 +107,22 @@ fun BackendSheet(
             Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("Backend", fontFamily = NotepadFonts.PatrickHand, fontSize = 28.sp, color = NotepadColors.Ink)
+            Text("Solver connection", fontFamily = NotepadFonts.PatrickHand, fontSize = 28.sp, color = NotepadColors.Ink)
 
             when (state) {
                 is BackendState.Connected -> {
                     Text("Connected ✓  ${state.latencyMs}ms", fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Green)
                     Text(state.url, fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = NotepadColors.Muted)
                 }
-                is BackendState.Searching -> Text("Checking the backend URL…", fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Muted)
-                is BackendState.NotFound -> Text("Can't reach that URL. Type your backend's address below, or scan its QR code.", fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.Red)
+                is BackendState.Searching -> Text(
+                    if (ownAddress) "Connecting to your solver…" else "Connecting to the solver… the first time can take up to a minute.",
+                    fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Muted,
+                )
+                is BackendState.NotFound -> Text(
+                    if (ownAddress) "I can't reach the address you set. Check it, or go back to the default solver."
+                    else "I can't reach the solver. Check that you're online, then tap Try again.",
+                    fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.Red,
+                )
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -120,7 +131,7 @@ fun BackendSheet(
                     modifier = Modifier.weight(1f).height(48.dp),
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
-                ) { Text("Test again", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
+                ) { Text("Try again", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
                 Button(
                     onClick = onScanQr,
                     modifier = Modifier.weight(1f).height(48.dp),
@@ -129,7 +140,10 @@ fun BackendSheet(
                 ) { Text("Scan QR code", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
             }
 
-            Text("Backend URL", fontFamily = NotepadFonts.PatrickHand, fontSize = 15.sp, color = NotepadColors.Muted)
+            Text(
+                "Running your own solver? Enter its address (optional)",
+                fontFamily = NotepadFonts.PatrickHand, fontSize = 15.sp, color = NotepadColors.Muted,
+            )
             OutlinedTextField(
                 value = url,
                 onValueChange = { url = it; invalid = false },
@@ -153,7 +167,15 @@ fun BackendSheet(
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),
                 enabled = url.isNotBlank(),
-            ) { Text("Use this URL", fontFamily = NotepadFonts.Inter, fontSize = 15.sp) }
+            ) { Text("Use this address", fontFamily = NotepadFonts.Inter, fontSize = 15.sp) }
+            if (ownAddress && onUseDefault != null) {
+                OutlinedButton(
+                    onClick = { onUseDefault(); onDismiss() },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+                ) { Text("Use the default solver", fontFamily = NotepadFonts.Inter, fontSize = 15.sp) }
+            }
         }
     }
 }

@@ -109,11 +109,12 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
             onScanQr = {
                 qrScanner.launch(
                     ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                        .setPrompt("Scan the backend QR from the terminal").setBeepEnabled(false).setOrientationLocked(false),
+                        .setPrompt("Scan the QR code your solver printed").setBeepEnabled(false).setOrientationLocked(false),
                 )
             },
             onSaveUrl = vm::setBackendUrl,
             onDismiss = { showBackendSheet = false },
+            onUseDefault = vm::useDefaultBackend,
         )
     }
 

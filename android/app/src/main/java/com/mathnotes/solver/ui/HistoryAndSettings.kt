@@ -329,8 +329,8 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> U
     var adaptiveThreshold by remember { mutableStateOf(vm.useAdaptiveThreshold) }
     val handwriting by vm.handwritingSamples.collectAsState()
     val backend by vm.backend.collectAsState()
-    // Mirror an auto-discovered URL into the field until the user starts editing it.
-    LaunchedEffect(backend) { (backend as? BackendState.Connected)?.let { if (!edited) url = it.url } }
+    // The field holds only an address the user set themselves. It is empty for the default
+    // solver, and saving it empty goes back to the default.
 
     NotepadPage(
         title = "Settings",
@@ -345,9 +345,9 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> U
         },
     ) {
         Column(Modifier.padding(end = 4.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            SectionHeader("Backend")
+            SectionHeader("Solver connection")
             BackendStatusRow(backend, onAutoDetect = vm::searchBackend)
-            BodyText("Enter the backend URL, such as http://192.168.1.42:8000/.")
+            BodyText("ProofPad connects to its solver on its own. Running your own? Enter its address, such as http://192.168.1.42:8000. Leave this empty to use the default.")
             OutlinedTextField(
                 value = url,
                 onValueChange = { url = it; invalidUrl = false; edited = true },
@@ -451,12 +451,12 @@ private fun BackendStatusRow(status: BackendState, onAutoDetect: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(Modifier.weight(1f)) {
             when (status) {
-                is BackendState.Searching -> BodyText("Checking the backend URL…")
+                is BackendState.Searching -> BodyText("Connecting to the solver…")
                 is BackendState.Connected -> {
                     Text("Connected ✓  ${status.latencyMs}ms", fontFamily = NotepadFonts.Inter, fontSize = 15.sp, color = NotepadColors.Green)
                     Text(status.url, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = NotepadColors.Muted)
                 }
-                is BackendState.NotFound -> BodyText("Couldn’t reach the backend.", color = NotepadColors.Red)
+                is BackendState.NotFound -> BodyText("I can’t reach the solver.", color = NotepadColors.Red)
             }
         }
         if (status is BackendState.Searching) {

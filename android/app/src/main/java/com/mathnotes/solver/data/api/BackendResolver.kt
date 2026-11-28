@@ -39,5 +39,25 @@ class BackendResolver(
     companion object {
         /** Drop a trailing slash so a base URL is a clean `scheme://host:port`. */
         fun normalize(url: String): String = url.trim().trimEnd('/')
+
+        const val SAVED = "saved"
+        const val HOSTED = "hosted"
+        const val BUILD = "build"
+
+        /**
+         * Which base URLs to try, in order.
+         *
+         * - Someone who typed or scanned an address ([saved]) gets exactly that one. It is never
+         *   silently swapped for another server: if it is down, the app says so.
+         * - Everyone else gets the hosted service first, so a fresh install works with no setup,
+         *   and then the address this build was configured with (a developer's laptop).
+         */
+        fun candidates(saved: String?, hosted: String?, build: String?): List<Pair<String, String>> {
+            val mine = saved?.trim().orEmpty()
+            if (mine.isNotEmpty()) return listOf(SAVED to normalize(mine))
+            return listOf(HOSTED to hosted, BUILD to build)
+                .mapNotNull { (name, url) -> url?.trim()?.takeIf { it.isNotEmpty() }?.let { name to normalize(it) } }
+                .distinctBy { it.second }
+        }
     }
 }

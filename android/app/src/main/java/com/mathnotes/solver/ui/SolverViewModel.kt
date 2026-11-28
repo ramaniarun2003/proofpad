@@ -331,10 +331,17 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
 
     /** Manual override (Settings field or a scanned QR): validate, save as the "saved" strategy, re-locate. */
     fun setBackendUrl(url: String): Boolean {
+        if (url.isBlank()) { useDefaultBackend(); return true }   // an empty field means "no address of my own"
         val normalized = ApiClient.parseBaseUrl(url)?.trimEnd('/') ?: return false
         prefs.edit().putString(BACKEND_URL_PREF, normalized).apply()
-        locator.locate()
+        locator.locate(restart = true)
         return true
+    }
+
+    /** Forget a typed or scanned address: the app goes back to the hosted solver. */
+    fun useDefaultBackend() {
+        prefs.edit().remove(BACKEND_URL_PREF).apply()
+        locator.locate(restart = true)
     }
 
     /** One-time welcome cover: mark it seen after "Get started", or clear it to re-demo from Settings. */

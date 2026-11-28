@@ -78,10 +78,11 @@ Host the backend publicly so the app works from campus Wi-Fi without the laptop.
    `curl -H "X-ProofPad-Key: <key>" https://<service>.onrender.com/discover`.
 4. **Point the app at it:** put the real URL and key in `android/local.properties` (gitignored):
    `PUBLIC_BACKEND_URL=https://<service>.onrender.com` and `PROOFPAD_API_KEY=<key>`, then rebuild.
-   The app tries saved → USB → mDNS → gateway → this public URL last, so on-LAN it still prefers the laptop.
+   With no address set on the phone the app tries this hosted URL first, then `BACKEND_URL` (see
+   "Which backend the app uses" below).
 5. **Keep it warm:** the free instance sleeps after ~15 min. `.github/workflows/keepwarm.yml` pings
    `/health` every 10 min during class hours — set the repo variable `PROOFPAD_URL` to your Render URL.
-   First request after a sleep takes up to ~60s (the app shows "waking up…").
+   First request after a sleep takes up to ~60s (the app shows "Connecting to the solver…" and waits up to a minute).
 
    > **Disk note:** Render's *free* plan has no persistent disk, so `/data` is ephemeral — the SQLite
    > file resets on each redeploy. That's fine here (the phone caches every session in Room), and the
@@ -98,7 +99,14 @@ Health check path `/health`. Roll back with `fly releases` + `fly deploy --image
 
 ## Android — see `android/README.md`
 Open `android/` in Android Studio, set `BACKEND_URL` in `local.properties` (or from the app's
-Backend button), run on a device. Emulator default is `http://10.0.2.2:8000/`.
+"solver" chip), run on a device. Emulator default is `http://10.0.2.2:8000/`.
+
+### Which backend the app uses
+With no address set on the phone, the app tries the hosted service (`PUBLIC_BACKEND_URL`) first and
+then the build's `BACKEND_URL`. It only counts the hosted service as connected if that service
+accepts the build's `PROOFPAD_API_KEY`, so **a build made without the key in `local.properties`
+will not use the hosted service** and falls back to `BACKEND_URL`. An address typed or scanned in
+the app (the "solver" chip, or Settings) replaces both; "Use the default solver" clears it.
 
 ## Demo-day network (report §3.4)
 Laptop runs `./run.sh` on a dedicated hotspot; phones join the same hotspot and point at the laptop's

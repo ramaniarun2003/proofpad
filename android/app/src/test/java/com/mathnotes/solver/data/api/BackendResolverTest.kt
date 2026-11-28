@@ -71,4 +71,51 @@ class BackendResolverTest {
         )
         assertEquals("gateway", resolver.resolve()?.strategy)
     }
+
+    // --- which addresses are tried ---
+
+    private val hosted = "https://proofpad.example.com/"
+    private val laptop = "http://192.168.1.42:8000/"
+
+    @Test fun a_fresh_install_tries_the_hosted_solver_first_then_the_builds_address() {
+        assertEquals(
+            listOf("hosted" to "https://proofpad.example.com", "build" to "http://192.168.1.42:8000"),
+            BackendResolver.candidates(saved = null, hosted = hosted, build = laptop),
+        )
+        assertEquals(BackendResolver.candidates(null, hosted, laptop), BackendResolver.candidates("  ", hosted, laptop))
+    }
+
+    @Test fun an_address_the_user_set_is_the_only_one_tried() {
+        assertEquals(
+            listOf("saved" to "http://10.0.0.5:8123"),
+            BackendResolver.candidates(saved = " http://10.0.0.5:8123/ ", hosted = hosted, build = laptop),
+        )
+    }
+
+    @Test fun missing_or_duplicate_defaults_are_dropped() {
+        assertEquals(listOf("build" to "http://192.168.1.42:8000"), BackendResolver.candidates(null, "", laptop))
+        assertEquals(listOf("hosted" to "https://proofpad.example.com"), BackendResolver.candidates(null, hosted, null))
+        assertEquals(listOf("hosted" to "http://192.168.1.42:8000"), BackendResolver.candidates(null, laptop, "http://192.168.1.42:8000"))
+        assertEquals(emptyList<Pair<String, String>>(), BackendResolver.candidates(null, null, " "))
+    }
+
+    @Test fun a_fresh_install_connects_to_the_hosted_solver_when_it_answers() = runBlocking {
+        val resolver = BackendResolver(
+            strategies = listOf("saved", "hosted", "build").map { name ->
+                BackendResolver.Strategy(name) { BackendResolver.candidates(null, hosted, laptop).filter { it.first == name }.map { it.second } }
+            },
+            probe = prober("https://proofpad.example.com", "http://192.168.1.42:8000"),
+        )
+        assertEquals(BackendResolver.Resolution("hosted", "https://proofpad.example.com", 7L), resolver.resolve())
+    }
+
+    @Test fun it_falls_back_to_the_builds_address_when_the_hosted_solver_does_not_answer() = runBlocking {
+        val resolver = BackendResolver(
+            strategies = listOf("saved", "hosted", "build").map { name ->
+                BackendResolver.Strategy(name) { BackendResolver.candidates(null, hosted, laptop).filter { it.first == name }.map { it.second } }
+            },
+            probe = prober("http://192.168.1.42:8000"),
+        )
+        assertEquals("build", resolver.resolve()!!.strategy)
+    }
 }
