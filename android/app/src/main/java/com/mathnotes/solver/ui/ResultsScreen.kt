@@ -1,5 +1,11 @@
 package com.mathnotes.solver.ui
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.BorderStroke
@@ -87,6 +93,15 @@ fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery
     val ctx = LocalContext.current
     val date = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d")) }
 
+    // A finished PDF goes to the share sheet; a failed one opens the error sheet.
+    LaunchedEffect(state.exportedFile) {
+        state.exportedFile?.let { file ->
+            vm.exportShared()
+            runCatching { PdfExporter.share(ctx, file) }.onFailure { vm.notify(UiMessage("I couldn't open the share sheet")) }
+        }
+    }
+    if (state.exportFailed) ExportErrorSheet(onRetry = vm::exportPdf, onDismiss = vm::dismissExportError)
+
     if (result.verdict == Verdict.UNSOLVED) {
         UnsolvedContent(
             problemLatex = state.latex,
@@ -117,7 +132,8 @@ fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery
         onShowSolution = vm::showFullSolution,
         difficulty = state.difficulty,
         onRate = vm::setDifficulty,
-        onExport = { PdfExporter.exportAndShare(ctx, state) },
+        onExport = vm::exportPdf,
+        exporting = state.exporting,
         onNewProblem = { vm.reset(); onNewProblem() },
         onSaveToGallery = onSaveToGallery,
         savedTo = state.savedTo,
@@ -216,6 +232,7 @@ fun ResultsContent(
     onNewProblem: () -> Unit,
     onSaveToGallery: (() -> Unit)? = null,
     savedTo: String? = null,
+    exporting: Boolean = false,
 ) {
     // A student-chain check: the rows are the student's own lines, each with its own status;
     // our solution (if asked for) is listed separately below, muted.
@@ -238,7 +255,7 @@ fun ResultsContent(
             OutlinedButton(
                 onClick = onExport,
                 // A flagged generated solution is held back; a student's own checked work can always be exported.
-                enabled = !isFlagged || isStudentChain,
+                enabled = (!isFlagged || isStudentChain) && !exporting,
                 modifier = Modifier.weight(1f).height(48.dp),
                 shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.5.dp, if (isFlagged && !isStudentChain) NotepadColors.Held else NotepadColors.Ink),
@@ -246,7 +263,13 @@ fun ResultsContent(
                     contentColor = NotepadColors.Ink,
                     disabledContentColor = NotepadColors.Held,
                 ),
-            ) { Text("Export PDF", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
+            ) {
+                if (exporting) {
+                    CircularProgressIndicator(Modifier.size(16.dp), color = NotepadColors.Ink, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(if (exporting) "Making PDF…" else "Export PDF", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp)
+            }
 
             Button(
                 onClick = onNewProblem,
@@ -529,6 +552,41 @@ private fun DifficultyRatingRow(difficulty: Difficulty?, onRate: (Difficulty) ->
             if (difficulty != null) {
                 Spacer(Modifier.width(8.dp))
                 Text("$label ($stars / 3)", fontFamily = NotepadFonts.PatrickHand, fontSize = 16.sp, color = NotepadColors.Muted)
+            }
+        }
+    }
+}
+
+
+/** Notepad-style sheet for a PDF that could not be written, with Retry. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExportErrorSheet(onRetry: () -> Unit, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = NotepadColors.Paper) {
+        Column(
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("I couldn't make the PDF", fontFamily = NotepadFonts.PatrickHand, fontSize = 26.sp, color = NotepadColors.Ink)
+            StickyNote(Modifier.fillMaxWidth(), background = NotepadColors.StickyPink, rotationDeg = -1f) {
+                Text(
+                    "Something went wrong while writing the file. Your note is safe. If the phone is low on space, free some up, then try again.",
+                    fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.NoteInkPink,
+                )
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+                ) { Text("Close", fontFamily = NotepadFonts.Inter, fontSize = 15.sp) }
+                Button(
+                    onClick = { onDismiss(); onRetry() },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),
+                ) { Text("Retry", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
             }
         }
     }

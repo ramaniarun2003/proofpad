@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import com.mathnotes.solver.export.PdfExporter
 import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
@@ -57,6 +58,12 @@ data class SolverUiState(
     val difficulty: Difficulty? = null,
     /** The student's own working, one LaTeX step per row (prefilled from the Identify split). */
     val userSteps: List<String> = emptyList(),
+    /** A PDF is being written; the export buttons show progress and are disabled. */
+    val exporting: Boolean = false,
+    /** A finished PDF waiting to be handed to the share sheet (Results does it, then clears this). */
+    val exportedFile: File? = null,
+    /** Writing the PDF failed: Results shows the error sheet with Retry. */
+    val exportFailed: Boolean = false,
     /** The folder this note was last saved to, once it has been; Results shows it on the save button. */
     val savedTo: String? = null,
     /** Every problem found in the capture (more than one for a page of problems) and the one loaded. */
@@ -583,6 +590,25 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
     }
+
+    /** Write the current note's PDF off the main thread; Results shares it or shows the error sheet. */
+    fun exportPdf() {
+        val snapshot = _state.value
+        if (snapshot.exporting || snapshot.result == null) return
+        _state.update { it.copy(exporting = true, exportFailed = false, exportedFile = null) }
+        viewModelScope.launch {
+            try {
+                val file = withContext(Dispatchers.IO) { PdfExporter.export(getApplication(), snapshot) }
+                _state.update { it.copy(exporting = false, exportedFile = file) }
+            } catch (e: Exception) {
+                Timber.e(e, "PDF export failed")
+                _state.update { it.copy(exporting = false, exportFailed = true) }
+            }
+        }
+    }
+
+    fun exportShared() = _state.update { it.copy(exportedFile = null) }
+    fun dismissExportError() = _state.update { it.copy(exportFailed = false) }
 
     /** An unsolved note's "Fix the reading": take it back to Review, editable, with nothing solved. */
     fun reviewUnsolved() = _state.update { it.copy(result = null, error = null, parseError = null, busy = false, status = "") }

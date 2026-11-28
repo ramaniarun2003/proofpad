@@ -71,7 +71,7 @@ fun SaveToGalleryScreen(vm: SolverViewModel, onDone: () -> Unit) {
         onCreateFolder = { name, color, term -> vm.createFolder(name, color, term) },
         onSave = { folderId, title, difficulty, tags, keepPhoto, alsoExport ->
             vm.saveToGallery(folderId, title, difficulty, tags, keepPhoto) {
-                if (alsoExport) PdfExporter.exportAndShare(ctx, state)
+                if (alsoExport) vm.exportPdf()   // Results shows the progress, then the share sheet
                 onDone()
             }
         },
