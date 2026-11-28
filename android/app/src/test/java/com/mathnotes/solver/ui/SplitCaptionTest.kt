@@ -97,4 +97,27 @@ class SplitCaptionTest {
             assertFalse(it.contains("{") || it.contains("Exception") || it.contains("http"))
         }
     }
+
+    @Test fun no_failure_message_carries_exception_text_or_a_response_body() {
+        fun http(code: Int, body: String) = retrofit2.HttpException(
+            retrofit2.Response.error<Any>(code, okhttp3.ResponseBody.create(null, body)),
+        )
+        val failures = listOf(
+            java.net.UnknownHostException("Unable to resolve host \"192.168.40.9\""),
+            http(422, """{"detail":"could not parse 'x(': Invalid LaTeX"}"""),
+            http(500, "Internal Server Error"),
+            http(503, """{"detail":"recognition unavailable: Mathpix returned 429: {\"error\":\"quota\"}"}"""),
+            http(401, """{"detail":"invalid or missing X-ProofPad-Key"}"""),
+            IllegalStateException("java.lang.NullPointerException at Preprocessor.decodeUpright"),
+        )
+        failures.forEach { e ->
+            listOf(failureNote(e), recognizeFailureNote(e)).forEach { note ->
+                listOf("{", "detail", "Exception", "Mathpix", "192.168", "HTTP", "500", "503", "422", "backend").forEach { leak ->
+                    assertFalse("\"$note\" leaks \"$leak\"", note.contains(leak))
+                }
+                assertTrue(note.length in 20..120)
+            }
+        }
+        assertEquals(PARSE_ERROR_NOTE, failureNote(http(422, "x")))
+    }
 }

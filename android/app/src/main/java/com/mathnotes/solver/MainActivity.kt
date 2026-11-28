@@ -1,5 +1,6 @@
 package com.mathnotes.solver
 
+import com.mathnotes.solver.ui.UiMessage
 import com.mathnotes.solver.ui.components.NoticeHost
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -90,7 +91,12 @@ class MainActivity : ComponentActivity() {
                         composable("setupRetake") {
                             // Single-line retake (formula mode) for a line the page read missed.
                             LaunchedEffect(Unit) {
-                                setupVm.events.collect { if (it is SetupEvent.Recognized) nav.popBackStack("setupCheck", inclusive = false) }
+                                setupVm.events.collect {
+                                    when (it) {
+                                        is SetupEvent.Recognized -> nav.popBackStack("setupCheck", inclusive = false)
+                                        is SetupEvent.Error -> vm.notify(UiMessage(it.message))
+                                    }
+                                }
                             }
                             CaptureScreen(
                                 vm,

@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui.setup
 
+import com.mathnotes.solver.ui.failureNote
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -138,7 +139,8 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
                 _events.emit(SetupEvent.Recognized)
             } catch (e: Exception) {
                 _state.update { it.copy(busy = false, status = "") }
-                _events.emit(SetupEvent.Error(e.message ?: "Couldn't read the page, try again"))
+                Timber.w(e, "setup page recognition failed")
+                _events.emit(SetupEvent.Error(failureNote(e)))
             }
         }
     }
@@ -170,7 +172,8 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
                 _events.emit(SetupEvent.Recognized)
             } catch (e: Exception) {
                 _state.update { it.copy(busy = false, status = "") }
-                _events.emit(SetupEvent.Error(e.message ?: "Couldn't read that line, try again"))
+                Timber.w(e, "setup line retake failed")
+                _events.emit(SetupEvent.Error(failureNote(e)))
             }
         }
     }

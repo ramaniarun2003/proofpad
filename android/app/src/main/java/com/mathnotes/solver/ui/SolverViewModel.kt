@@ -527,7 +527,9 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                 repo.saveVerification(s.sessionId, s.latex, s.topic, all, current.verified, current.mismatchAt)
                 _state.update { it.copy(solutionBusy = false, result = current.copy(steps = all), solutionAnswer = solved.answerLatex) }
             } catch (e: Exception) {
-                _state.update { it.copy(solutionBusy = false, error = describe(e)) }
+                Timber.w(e, "full solution failed")
+                _state.update { it.copy(solutionBusy = false) }
+                notify(UiMessage(failureNote(e)))   // Results has no error line of its own
             }
         }
     }
@@ -630,17 +632,8 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
             Timber.w("parse failure from the backend: %s", body.take(300))
             copy(busy = false, status = "", error = null, parseError = parseNote(body))
         } else {
-            copy(busy = false, status = "", error = describe(e))
+            Timber.w(e, "request failed")
+            copy(busy = false, status = "", error = failureNote(e))
         }
 
-    private fun describe(e: Exception): String = when (e) {
-        is HttpException -> when (e.code()) {
-            413 -> "Image too large — move closer or crop."
-            422 -> "The backend could not parse that expression: ${e.response()?.errorBody()?.string()?.take(120)}"
-            503 -> "Recognition service unavailable — retry, or open a cached session from History."
-            else -> "Server error ${e.code()}"
-        }
-        is IOException -> "Can't reach the backend. Tap the status chip to find or set it."
-        else -> e.message ?: e.toString()
-    }
 }

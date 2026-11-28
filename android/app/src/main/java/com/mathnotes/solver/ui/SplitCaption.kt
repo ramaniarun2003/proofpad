@@ -27,7 +27,26 @@ const val PHOTO_TOO_LARGE_NOTE = "That photo is too large to send. Retake it a l
 fun recognizeFailureNote(e: Throwable): String = when {
     e is java.io.IOException -> CANT_REACH_NOTE
     e is retrofit2.HttpException && e.code() == 413 -> PHOTO_TOO_LARGE_NOTE
+    e is retrofit2.HttpException && e.code() == 503 -> READER_DOWN_NOTE
     else -> SOLVER_TROUBLE_NOTE
+}
+
+const val READER_DOWN_NOTE = "I can't read handwriting right now. Try again in a minute. Your photo is kept."
+
+/**
+ * Every other failure (solve, check, full solution, the handwriting wizard) as one plain sentence
+ * with what to do next. The exception's own message and the response body are for the log only.
+ */
+fun failureNote(e: Throwable): String = when {
+    e is java.io.IOException -> "I can't reach the solver. Check the connection, then try again."
+    e is retrofit2.HttpException -> when (e.code()) {
+        413 -> PHOTO_TOO_LARGE_NOTE
+        422 -> PARSE_ERROR_NOTE
+        401, 403 -> "The solver didn't accept this app. Check the solver address in Settings."
+        503 -> "I can't read handwriting right now. Try again in a minute."
+        else -> "The solver had a problem. Try again."
+    }
+    else -> "Something went wrong. Try again."
 }
 
 /**

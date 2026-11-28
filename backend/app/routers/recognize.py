@@ -40,7 +40,8 @@ async def recognize(
         try:
             page = await recognition.recognize_page(data, content_type)
         except recognition.RecognitionError as exc:
-            raise HTTPException(503, f"recognition unavailable: {exc}")
+            log.warning("page recognition failed: %s", exc)
+            raise HTTPException(503, "recognition unavailable")
         row = SessionRow(id=session_id, device_id=device_id, image_path=str(path),
                          recognized_latex=page.raw_text, confidence=0.0)
         row.log("recognize", mode="page", lines=len(page.lines), stub=settings.STUB_RECOGNITION)
@@ -60,7 +61,8 @@ async def recognize(
     except asyncio.TimeoutError:
         raise HTTPException(503, "recognition unavailable: timed out")
     except recognition.RecognitionError as exc:
-        raise HTTPException(503, f"recognition unavailable: {exc}")
+        log.warning("recognition failed: %s", exc)   # may quote the recognizer's reply: log only
+        raise HTTPException(503, "recognition unavailable")
 
     # Identify: prefer Mathpix's per-line reading (with bboxes); fall back to the full string.
     split = identify.identify([(ln.latex, ln.bbox) for ln in result.lines] if result.lines else result.latex)
