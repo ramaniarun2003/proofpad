@@ -335,7 +335,7 @@ fun ResultsContent(
             val bad = steps.getOrNull(flaggedIndex)
             val fallback = if (bad?.status == "unparseable") "I could not read step $n." else
                 "Step $n doesn't follow from ${if (n == 1) "the problem" else "step ${n - 1}"}."
-            VerifierNote(message = bad?.note?.ifBlank { fallback } ?: fallback, resolveFromStep = null)
+            VerifierNote(message = bad?.note?.ifBlank { fallback } ?: fallback)
         } else if (isIncomplete) {
             StickyNote(rotationDeg = 1.5f) {
                 Text("almost there", fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp, color = NotepadColors.Muted)
@@ -348,10 +348,7 @@ fun ResultsContent(
             }
         } else if (isFlagged) {
             val n = flaggedIndex!! + 1
-            VerifierNote(
-                message = details.joinToString(" ").ifBlank { "Step $n doesn't match step ${n - 1}." },
-                resolveFromStep = n - 1,
-            )
+            VerifierNote(message = details.joinToString(" ").ifBlank { "Step $n doesn't match step ${n - 1}." })
         } else if (selected != null && selected!! < steps.size) {
             val s = steps[selected!!]
             StickyNote(rotationDeg = 1.5f) {
@@ -486,38 +483,13 @@ fun ResultsContent(
 }
 
 @Composable
-private fun VerifierNote(message: String, resolveFromStep: Int?) {
+private fun VerifierNote(message: String) {
     StickyNote(background = NotepadColors.StickyPink, rotationDeg = -1.5f) {
         Text("verifier says", fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp, color = NotepadColors.NoteInkPink)
         NoteText(message, fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.NoteInkPink)
-        // The two chips are visual only; a student-chain note (resolveFromStep == null) leaves them out.
-        if (resolveFromStep != null) {
-            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                NoteAction("Edit step", filled = false)
-                NoteAction("Re-solve from step $resolveFromStep", filled = true)
-            }
-        }
     }
 }
 
-/** Small action chip inside the pink verifier note (visual only in this restyle). */
-@Composable
-private fun NoteAction(label: String, filled: Boolean) {
-    val shape = RoundedCornerShape(8.dp)
-    val base = if (filled) {
-        Modifier.clip(shape).background(NotepadColors.NoteInkPink)
-    } else {
-        Modifier.clip(shape).border(1.5.dp, NotepadColors.NoteInkPink, shape)
-    }
-    Box(base.padding(horizontal = 12.dp, vertical = 4.dp)) {
-        Text(
-            label,
-            fontFamily = NotepadFonts.PatrickHand,
-            fontSize = 15.sp,
-            color = if (filled) NotepadColors.StickyPink else NotepadColors.NoteInkPink,
-        )
-    }
-}
 
 /**
  * Difficulty stars — one widget, one data field. Backs the gallery [Difficulty]

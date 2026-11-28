@@ -122,7 +122,8 @@ class MainActivity : ComponentActivity() {
                             FolderDetailScreen(vm,
                                 onBack = { nav.popBackStack() },
                                 onOpenNote = { nav.navigate("results") },
-                                onAddNote = { nav.popBackStack("capture", inclusive = false) })
+                                onAddNote = { nav.popBackStack("capture", inclusive = false) },
+                                onSettings = { nav.navigate("settings") })
                         }
                         composable("galleryCrop") {
                             GalleryCropScreen(

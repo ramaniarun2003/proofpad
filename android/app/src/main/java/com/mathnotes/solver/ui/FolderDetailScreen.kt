@@ -72,7 +72,7 @@ private val TILTS = listOf(-1f, 1.2f, 0.6f, -1.4f, 0.8f)
 
 /** VM-bound folder detail (mockup 08). */
 @Composable
-fun FolderDetailScreen(vm: SolverViewModel, onBack: () -> Unit, onOpenNote: () -> Unit, onAddNote: () -> Unit) {
+fun FolderDetailScreen(vm: SolverViewModel, onBack: () -> Unit, onOpenNote: () -> Unit, onAddNote: () -> Unit, onSettings: () -> Unit = {}) {
     val filter by vm.folderFilter.collectAsState()
     val folders by vm.folders.collectAsState()
     val notes by vm.folderNotes.collectAsState()
@@ -94,6 +94,7 @@ fun FolderDetailScreen(vm: SolverViewModel, onBack: () -> Unit, onOpenNote: () -
         onBack = onBack,
         onOpenNote = { vm.openNote(it); onOpenNote() },
         onAddNote = onAddNote,
+        onSettings = onSettings,
         onRename = { name -> vm.renameFolder(filter.folderId, name) },
         onDelete = { vm.deleteFolder(filter.folderId); onBack() },
         onDeleteNote = vm::deleteNote,
@@ -117,6 +118,7 @@ fun FolderDetailContent(
     onBack: () -> Unit,
     onOpenNote: (SessionEntity) -> Unit,
     onAddNote: () -> Unit,
+    onSettings: () -> Unit = {},
     onRename: (String) -> Unit,
     onDelete: () -> Unit,
     onDeleteNote: ((SessionEntity) -> Unit)? = null,
@@ -193,22 +195,21 @@ fun FolderDetailContent(
                 Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // Multi-select and whole-folder export are not built yet, so they are not shown.
                 OutlinedButton(
-                    onClick = { /* multi-select: deferred */ },
-                    enabled = false,
+                    onClick = onSettings,
                     modifier = Modifier.weight(1f).height(48.dp),
                     shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.5.dp, NotepadColors.Held),
-                    colors = ButtonDefaults.outlinedButtonColors(disabledContentColor = NotepadColors.Held),
-                ) { Text("Select", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
+                    border = BorderStroke(1.5.dp, NotepadColors.Ink),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+                ) { Text("Settings", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
 
                 Button(
-                    onClick = { /* folder PDF export: deferred */ },
-                    enabled = false,
+                    onClick = onAddNote,
                     modifier = Modifier.weight(1.4f).height(48.dp),
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(disabledContainerColor = NotepadColors.Held, disabledContentColor = NotepadColors.Paper),
-                ) { Text("Export folder as PDF", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
+                    colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),
+                ) { Text("Snap a problem", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
             }
         }
     }
