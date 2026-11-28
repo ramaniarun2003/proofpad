@@ -1,0 +1,56 @@
+{
+  "request_id": "2a9f5e33-e4d0-4d73-89f2-e4a105c40d07",
+  "version": "SuperNet-202",
+  "is_printed": false,
+  "is_handwritten": true,
+  "auto_rotate_confidence": 1.2324463227741944e-08,
+  "auto_rotate_degrees": 0,
+  "image_height": 280,
+  "image_width": 1248,
+  "parse_status": "parsed",
+  "fallback_count": 0,
+  "page_confidence": {
+    "confidence": 0.8121474385261536,
+    "text_confidence": 1,
+    "layout_confidence": 0.8121474385261536,
+    "method": "prototype_min_v1"
+  },
+  "confidence": 1,
+  "confidence_rate": 1,
+  "latex_styled": "\\sum \\frac{1}{n^{2}} \\Rightarrow \\text { converges }",
+  "text": "$\\sum \\frac{1}{n^{2}} \\Rightarrow$ converges",
+  "line_data": [
+    {
+      "type": "math",
+      "cnt": [
+        [
+          95,
+          29
+        ],
+        [
+          1061,
+          29
+        ],
+        [
+          1061,
+          199
+        ],
+        [
+          95,
+          199
+        ]
+      ],
+      "included": true,
+      "conversion_output": true,
+      "is_printed": false,
+      "is_handwritten": true,
+      "id": "ad223fb2ab2d493cb34f713f3779c6da",
+      "text": "$\\sum \\frac{1}{n^{2}} \\Rightarrow$ converges",
+      "after_hyphen": false,
+      "confidence": 1,
+      "confidence_rate": 1,
+      "parse_status": "parsed",
+      "layout_score": 0.7456839084625244
+    }
+  ]
+}

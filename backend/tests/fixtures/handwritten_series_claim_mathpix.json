@@ -1,0 +1,54 @@
+{
+  "request_id": "da212d5c-8586-45c0-8414-927c0476dca4",
+  "version": "SuperNet-202",
+  "is_printed": false,
+  "is_handwritten": true,
+  "auto_rotate_confidence": 4.4554275824282286e-09,
+  "auto_rotate_degrees": 0,
+  "image_height": 974,
+  "image_width": 1600,
+  "parse_status": "parsed",
+  "fallback_count": 0,
+  "page_confidence": {
+    "confidence": 0.873323917388916,
+    "text_confidence": null,
+    "layout_confidence": 0.873323917388916,
+    "method": "prototype_min_v1"
+  },
+  "confidence": 0.9555445058912131,
+  "confidence_rate": 0.9996475509794371,
+  "latex_styled": "\\begin{array}{l}\n\\operatorname{lime} x \\rightarrow 0 \\quad \\frac{\\ln (1+x)}{x}=1 \\\\\n\\sum \\frac{1}{n^{2}} \\Rightarrow \\text { converges } \\\\\n\\partial / \\partial x\\left(x^{2} y+y^{3}\\right)=2 x y+3 y^{2} \\\\\n\\int x^{2} d x\n\\end{array}",
+  "text": "$\\begin{array}{l}\\operatorname{lime} x \\rightarrow 0 \\quad \\frac{\\ln (1+x)}{x}=1 \\\\ \\sum \\frac{1}{n^{2}} \\Rightarrow \\text { converges } \\\\ \\partial / \\partial x\\left(x^{2} y+y^{3}\\right)=2 x y+3 y^{2} \\\\ \\int x^{2} d x\\end{array}$",
+  "line_data": [
+    {
+      "type": "math",
+      "cnt": [
+        [
+          111,
+          29
+        ],
+        [
+          1501,
+          29
+        ],
+        [
+          1501,
+          948
+        ],
+        [
+          111,
+          948
+        ]
+      ],
+      "included": true,
+      "conversion_output": true,
+      "is_printed": false,
+      "is_handwritten": true,
+      "id": "4625fdc5f23046e59405eb249ffee6b5",
+      "text": "$\\begin{array}{l}\\operatorname{lime} x \\rightarrow 0 \\quad \\frac{\\ln (1+x)}{x}=1 \\\\ \\sum \\frac{1}{n^{2}} \\Rightarrow \\text { converges } \\\\ \\partial / \\partial x\\left(x^{2} y+y^{3}\\right)=2 x y+3 y^{2} \\\\ \\int x^{2} d x\\end{array}$",
+      "after_hyphen": false,
+      "confidence": 0.9555445058912131,
+      "confidence_rate": 0.9996475509794371
+    }
+  ]
+}

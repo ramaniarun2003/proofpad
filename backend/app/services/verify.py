@@ -380,6 +380,58 @@ def _mistake_hint(a: sp.Basic, expected: sp.Basic, p: Parsed, topic: Topic,
     return ""
 
 
+def _test_name(rule: str) -> str:
+    if rule == "computer algebra system":
+        return "computer algebra check"
+    return rule if rule.endswith("test") else f"{rule} test"
+
+
+def verify_series_claim(p: Parsed, user_steps: list[str]) -> tuple[UserChainResult, Solution]:
+    """
+    A series step is a claim ("converges" / "diverges"), not an expression: compare it with the
+    outcome of our convergence tests. Returns the check and our test chain (the explanation).
+    """
+    from . import steps as step_service
+    from .identify import CONVERGES, normalize_claim
+
+    _, sol = step_service.solve(p, Topic.series)
+    conclusive = sol.verdict in ("converges", "diverges")
+    test = sol.steps[-1] if sol.steps else None
+    ours = f"our {_test_name(test.rule)} says it {sol.verdict}" if conclusive and test else \
+        "our convergence tests were inconclusive for this series"
+    if conclusive and test is not None and test.rule == "p-series" and "p = 1," in test.note:
+        ours += " (this is the harmonic series, p = 1)"
+
+    results: list[UserStepResult] = []
+    mismatch_at: int | None = None
+    for i, text in enumerate(user_steps):
+        claim = normalize_claim(text)
+        if claim is None:
+            results.append(UserStepResult(text, "unparseable",
+                                          hint="for a series, say whether it converges or diverges"))
+        else:
+            said = "converges" if claim == CONVERGES else "diverges"
+            shown = rf"\text{{{said}}}"
+            if not conclusive:
+                results.append(UserStepResult(shown, "ok", rule="not checked", hint=ours))
+                continue
+            if said == sol.verdict:
+                results.append(UserStepResult(shown, "ok", rule=test.rule))
+                continue
+            results.append(UserStepResult(shown, "wrong", hint=ours))
+        mismatch_at = i if mismatch_at is None else mismatch_at
+
+    expected = sol.verdict or ""
+    if mismatch_at is not None:
+        return UserChainResult("mismatch", mismatch_at, results, expected, False,
+                               [f"step {mismatch_at}: {results[mismatch_at].hint}"]), sol
+    if not results:
+        return UserChainResult("incomplete", None, results, expected, False, ["no steps were provided"]), sol
+    if not conclusive:
+        return UserChainResult("incomplete", None, results, expected, False, [ours]), sol
+    return UserChainResult("verified", None, results, expected, True, [ours]), sol
+
+
 def verify_user_steps(p: Parsed, topic: Topic, user_steps: list[str]) -> UserChainResult:
     """
     Check a student's chain for the problem `p`.

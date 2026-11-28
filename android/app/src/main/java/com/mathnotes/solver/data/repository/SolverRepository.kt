@@ -4,6 +4,7 @@ import android.content.Context
 import android.provider.Settings
 import com.mathnotes.solver.data.api.BackendLocator
 import com.mathnotes.solver.data.api.ApiClient
+import com.mathnotes.solver.data.api.Claim
 import com.mathnotes.solver.data.api.PageRecognizeResponse
 import com.mathnotes.solver.data.api.RecognizeResponse
 import com.mathnotes.solver.data.api.SolveRequest
@@ -74,8 +75,9 @@ class SolverRepository(context: Context) {
         }
         // The per-user corrections apply to the split pieces too, so Review shows them corrected.
         val problem = correctLatex(resp.problemLatex.ifBlank { resp.latex }, resp.confidence)
-        val steps = resp.steps.map { correctLatex(it, resp.confidence) }
-        Timber.i("recognize split: problem=%s | steps=%s | uncertain=%s", problem, steps, resp.splitUncertain)
+        val steps = resp.steps.map { if (Claim.isClaim(it)) it else correctLatex(it, resp.confidence) }
+        Timber.i("recognize split: problem=%s | steps=%s | at=%s | uncertain=%s | parse_error=%s",
+            problem, steps, resp.splitAt, resp.splitUncertain, resp.parseError)
         RecognizeResult(resp.copy(latex = corrected, problemLatex = problem, steps = steps), rawLatex = resp.latex)
     }
 

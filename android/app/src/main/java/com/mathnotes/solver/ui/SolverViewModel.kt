@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.mathnotes.solver.data.api.ApiClient
 import com.mathnotes.solver.data.api.BackendLocator
 import com.mathnotes.solver.data.api.BackendState
+import com.mathnotes.solver.data.api.Claim
 import com.mathnotes.solver.data.WelcomePrefs
 import com.mathnotes.solver.data.api.SolveResponse
 import com.mathnotes.solver.data.api.Step
@@ -55,8 +56,10 @@ data class SolverUiState(
     val difficulty: Difficulty? = null,
     /** The student's own working, one LaTeX step per row (prefilled from the Identify split). */
     val userSteps: List<String> = emptyList(),
-    /** The capture was split into problem + steps at an `=`; Review explains and offers an undo. */
-    val splitAtEquals: Boolean = false,
+    /** What the capture was split at ("=", "⇒", "line", …); empty when it was not split. */
+    val splitAt: String = "",
+    /** The problem did not parse (at recognition, or when Solve / Check was tapped): yellow note on Review. */
+    val parseError: String? = null,
     /** `=` signs but no operator found: the problem field may hold the student's work too. */
     val splitUncertain: Boolean = false,
     /** /solve is running for "Show me the full solution". */
@@ -260,7 +263,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
      * Auto); when set, it overrides the recognizer's guess so Review and Solve use it.
      */
     fun captureAndRecognize(raw: File, crop: CropSpec? = null, topicHint: String = "unknown") {
-        _state.update { it.copy(busy = true, status = "Preprocessing…", error = null, result = null, solutionAnswer = "", solutionBusy = false) }
+        _state.update { it.copy(busy = true, status = "Preprocessing…", error = null, parseError = null, result = null, solutionAnswer = "", solutionBusy = false) }
         val debug = debugImages
         val threshold = useAdaptiveThreshold
         viewModelScope.launch {
@@ -286,7 +289,9 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                         lowConfidence = rec.lowConfidence,
                         topic = topicToUse,
                         userSteps = finalSteps,
-                        splitAtEquals = finalSteps.isNotEmpty(),
+                        // An older backend sends no split_at; it only ever split at "=".
+                        splitAt = if (finalSteps.isEmpty()) "" else rec.splitAt.ifBlank { "=" },
+                        parseError = rec.parseError,
                         splitUncertain = rec.splitUncertain,
                         suggestions = suggestions,
                         rawLatex = recResult.rawLatex,
@@ -318,13 +323,13 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
      * (`problem = step0 = …`), keeping the rest as steps.
      */
     fun mergeStepIntoProblem(index: Int) = _state.update { st ->
-        if (index !in st.userSteps.indices) return@update st
+        if (index !in st.userSteps.indices || Claim.isClaim(st.userSteps[index])) return@update st
         val moved = st.userSteps.take(index + 1).filter { it.isNotBlank() }
         val rest = st.userSteps.drop(index + 1)
         st.copy(
             latex = (listOf(st.latex) + moved).joinToString(" = "),
             userSteps = rest,
-            splitAtEquals = rest.isNotEmpty(),
+            splitAt = if (rest.isEmpty()) "" else st.splitAt,
         )
     }
 
@@ -333,7 +338,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
         val s = _state.value
         val chain = s.userSteps.map { it.trim().removePrefix("=").trim() }.filter { it.isNotEmpty() }
         if (chain.isEmpty()) { solve(); return }
-        _state.update { it.copy(busy = true, status = "Verifying steps…", error = null) }
+        _state.update { it.copy(busy = true, status = "Verifying steps…", error = null, parseError = null) }
         viewModelScope.launch {
             try {
                 Timber.i("verify: problem=%s | steps=%s", s.latex, chain)
@@ -353,12 +358,21 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                 val verdict = check.verdict.ifBlank { Verdict.of(check.verified, check.mismatchAt) }
                 Timber.i("verify: verdict=%s mismatch_at=%s | %s", verdict, check.mismatchAt,
                     check.steps.joinToString(" | ") { "${it.status}:${it.rule}:${it.hint}" })
-                repo.saveVerification(s.sessionId, s.latex, s.topic, stepObjects, check.verified, check.mismatchAt)
+                // A series claim comes back with our convergence tests: list them below as the explanation.
+                val ours = check.solutionSteps.map {
+                    val word = it.afterLatex.trim()
+                    it.copy(
+                        afterLatex = if (word.all { c -> c.isLetter() || c == ' ' }) "\\text{$word}" else word,
+                        source = Step.SOURCE_SOLUTION,
+                    )
+                }
+                val topic = if (ours.isNotEmpty()) "series" else s.topic
+                repo.saveVerification(s.sessionId, s.latex, topic, stepObjects + ours, check.verified, check.mismatchAt)
 
                 val solveResp = SolveResponse(
                     sessionId = s.sessionId,
-                    topic = s.topic,
-                    steps = stepObjects,
+                    topic = topic,
+                    steps = stepObjects + ours,
                     answerLatex = stepObjects.lastOrNull()?.afterLatex ?: s.latex,
                     verified = check.verified,
                     mismatchAt = check.mismatchAt,
@@ -366,9 +380,12 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                     verdict = verdict,
                 )
 
-                _state.update { it.copy(busy = false, status = "", result = solveResp) }
+                _state.update {
+                    it.copy(busy = false, status = "", topic = topic, result = solveResp,
+                        solutionAnswer = ours.lastOrNull()?.afterLatex ?: "")
+                }
             } catch (e: Exception) {
-                _state.update { it.copy(busy = false, status = "", error = describe(e)) }
+                _state.update { it.failed(e) }
             }
         }
     }
@@ -416,13 +433,13 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     /** Step 5–6: send the confirmed LaTeX; receive steps + verification. */
     fun solve() {
         val s = _state.value
-        _state.update { it.copy(busy = true, status = "Solving…", error = null) }
+        _state.update { it.copy(busy = true, status = "Solving…", error = null, parseError = null) }
         viewModelScope.launch {
             try {
                 val resp = repo.solve(s.sessionId, s.latex, s.topic)
                 _state.update { it.copy(busy = false, status = "", sessionId = resp.sessionId, topic = resp.topic, result = resp) }
             } catch (e: Exception) {
-                _state.update { it.copy(busy = false, status = "", error = describe(e)) }
+                _state.update { it.failed(e) }
             }
         }
     }
@@ -455,6 +472,15 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun reset() = _state.update { SolverUiState() }
+
+    /** Solve / Check failed on Review. A 422 is a parse failure: the yellow note, not the raw error body. */
+    private fun SolverUiState.failed(e: Exception): SolverUiState =
+        if (e is HttpException && e.code() == 422) {
+            Timber.w("parse failure from the backend: %s", e.response()?.errorBody()?.string()?.take(300))
+            copy(busy = false, status = "", error = null, parseError = PARSE_ERROR_NOTE)
+        } else {
+            copy(busy = false, status = "", error = describe(e))
+        }
 
     private fun describe(e: Exception): String = when (e) {
         is HttpException -> when (e.code()) {
