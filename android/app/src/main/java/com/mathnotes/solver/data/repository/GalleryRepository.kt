@@ -49,6 +49,9 @@ class GalleryRepository(context: Context) {
 
     suspend fun restoreNote(note: SessionEntity) = sessions.upsert(note)
 
+    /** Every photo a note points at: the files a storage clean-up must leave alone. */
+    suspend fun noteImagePaths(): Set<String> = sessions.imagePaths().toSet()
+
     /** True when some other note still points at [imagePath], so the file must stay. */
     suspend fun photoInUse(imagePath: String): Boolean = sessions.countWithImage(imagePath) > 0
 

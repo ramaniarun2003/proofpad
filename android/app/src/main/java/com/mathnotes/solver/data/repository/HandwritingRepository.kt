@@ -27,6 +27,9 @@ class HandwritingRepository(context: Context) {
 
     suspend fun clear() = withContext(Dispatchers.IO) { dao.clear() }
 
+    /** Every thumbnail a saved sample points at: the files a storage clean-up must leave alone. */
+    suspend fun samplePaths(): Set<String> = withContext(Dispatchers.IO) { dao.getAll().mapNotNull { it.cropPath }.toSet() }
+
     companion object {
         /** The five lines we ask for, chosen to cover the symbols the recognizer stumbles on. */
         val EXPECTED: List<ExpectedExpression> = listOf(

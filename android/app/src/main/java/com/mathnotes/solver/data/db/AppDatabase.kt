@@ -79,6 +79,9 @@ interface SessionDao {
 
     @Query("UPDATE sessions SET imagePath = NULL WHERE sessionId = :id")
     suspend fun clearImage(id: String)
+
+    @Query("SELECT imagePath FROM sessions WHERE imagePath IS NOT NULL")
+    suspend fun imagePaths(): List<String>
 }
 
 /** v1 → v2: add the folders table and the gallery columns on sessions (no data loss). */

@@ -417,6 +417,30 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> U
                 enabled = handwriting.isNotEmpty(),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
             ) { Text(rebuildMsg ?: "Rebuild rules", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
+
+            // Storage: what the app's photos take up, and a way to clear what nothing needs.
+            SectionHeader("Storage")
+            var usageMb by remember { mutableStateOf<Double?>(null) }
+            var freedMsg by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(Unit) { vm.storageUsage { usageMb = it } }
+            Text(
+                usageMb?.let { "Photos, exported PDFs and thumbnails: ${"%.1f".format(it)} MB" } ?: "Measuring…",
+                fontFamily = NotepadFonts.Inter, fontSize = 14.sp, color = NotepadColors.Muted,
+            )
+            Text(
+                "Photos that belong to your notes are kept. Leftovers from retakes, deleted notes and old exports are cleared on their own within a day.",
+                fontFamily = NotepadFonts.Inter, fontSize = 13.sp, color = NotepadColors.Muted,
+            )
+            OutlinedButton(
+                onClick = {
+                    vm.freeUpSpace { report ->
+                        freedMsg = if (report.files == 0) "Nothing to clear" else "Freed ${"%.1f".format(report.megabytes)} MB"
+                        vm.storageUsage { usageMb = it }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+            ) { Text(freedMsg ?: "Free up space now", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import com.mathnotes.solver.data.StorageJanitor
 import androidx.lifecycle.SavedStateHandle
 import com.mathnotes.solver.export.PdfExporter
 import android.app.Application
@@ -401,6 +402,11 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
                 val recResult = repo.recognize(clean)
                 val rec = recResult.response
                 lastCaptureSession = rec.sessionId
+                // Read successfully: the preprocessed photo is what the note keeps. The camera or
+                // picked original (several megabytes) was only needed for a Retry.
+                withContext(Dispatchers.IO) { raw.delete() }
+                if (lastCapture?.raw == raw) lastCapture = null
+                if (pendingGalleryFile == raw) pendingGalleryFile = null
                 // The backend's Identify split: the problem, then the student's own steps in order.
                 val originalProblem = rec.problemLatex.ifBlank { rec.latex.trim() }
                 val finalSteps = rec.steps
@@ -675,12 +681,44 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
         }
 
 
+    /** Files the capture in progress still needs, whatever their age. */
+    private fun filesInUse(): Set<String> = listOfNotNull(
+        _state.value.imageFile, lastCapture?.raw, pending?.raw, pendingGalleryFile,
+    ).map { it.absolutePath }.toSet()
+
+    /**
+     * Delete files nothing needs any more (see [StorageJanitor]). [everything] ignores the age
+     * limits; it is what Settings "Free up space" runs.
+     */
+    private suspend fun cleanStorage(everything: Boolean): StorageJanitor.Report = withContext(Dispatchers.IO) {
+        val app = getApplication<Application>()
+        val report = StorageJanitor.sweep(
+            cacheDir = app.cacheDir, filesDir = app.filesDir,
+            noteImages = galleryRepo.noteImagePaths(), sampleImages = handwritingRepo.samplePaths(),
+            protect = filesInUse(), minAge = if (everything) 0L else null,
+        )
+        Timber.i("storage clean-up: %d files, %.1f MB freed", report.files, report.megabytes)
+        report
+    }
+
+    /** Settings: how much the app's photos take up, in megabytes. */
+    fun storageUsage(onResult: (Double) -> Unit) = viewModelScope.launch {
+        val app = getApplication<Application>()
+        val bytes = withContext(Dispatchers.IO) { StorageJanitor.usage(app.cacheDir, app.filesDir) }
+        onResult(bytes / (1024.0 * 1024.0))
+    }
+
+    /** Settings "Free up space". */
+    fun freeUpSpace(onResult: (StorageJanitor.Report) -> Unit) = viewModelScope.launch { onResult(cleanStorage(everything = true)) }
+
     // Last in the class on purpose: these collectors start at once (viewModelScope runs on
     // Main.immediate) and read properties declared above, which must already be initialized.
     init {
         viewModelScope.launch { _state.collect { saveSnapshot() } }
         viewModelScope.launch { _folderFilter.collect { saveSnapshot() } }
         viewModelScope.launch { _galleryQuery.collect { saveSnapshot() } }
+        // Once per start: clear out what earlier sessions left behind.
+        viewModelScope.launch { runCatching { cleanStorage(everything = false) } }
         // A restored problem gets its correction suggestions back (they are not saved).
         restored?.latex?.takeIf { it.isNotBlank() }?.let { latex ->
             viewModelScope.launch {
