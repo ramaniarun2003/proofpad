@@ -45,3 +45,13 @@ Run `./run.sh` from `backend/` in WSL. In a Windows terminal, check that the bac
 - `Preprocessor` is written against OpenCV 4.10 from Maven Central (`org.opencv:opencv`). If the
   artifact does not resolve, import the OpenCV Android SDK as a module instead (File → New → Import Module).
 - Cleartext HTTP to the LAN is enabled in `res/xml/network_security_config.xml` for the demo; do not ship that config.
+
+## On-device (instrumented) tests
+
+`./gradlew :app:connectedDebugAndroidTest` installs the debug build over the app on the connected
+device and **uninstalls it when it finishes**, deleting every note on that device. The task refuses
+to run unless you pass `-PallowDeviceWipe`. Use an emulator or a spare phone, never the demo phone:
+
+```
+./gradlew :app:connectedDebugAndroidTest -PallowDeviceWipe
+```

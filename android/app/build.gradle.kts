@@ -109,3 +109,19 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
 }
+
+// The connected (on-device) test tasks install the debug build over the real app and UNINSTALL
+// it when they finish, which deletes every note, folder and handwriting sample on that phone.
+// Refuse to run them unless that is asked for explicitly:
+//   ./gradlew :app:connectedDebugAndroidTest -PallowDeviceWipe
+val allowDeviceWipe = providers.gradleProperty("allowDeviceWipe").isPresent
+tasks.matching { it.name.startsWith("connected") && it.name.endsWith("AndroidTest") }.configureEach {
+    doFirst {
+        if (!allowDeviceWipe) {
+            throw GradleException(
+                "Refusing to run $name: it uninstalls ProofPad from the connected device when it finishes, " +
+                    "deleting all notes on it. Use an emulator or a spare phone and pass -PallowDeviceWipe to run it."
+            )
+        }
+    }
+}
