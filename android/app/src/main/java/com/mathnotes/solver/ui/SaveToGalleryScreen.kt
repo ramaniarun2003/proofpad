@@ -1,5 +1,8 @@
 package com.mathnotes.solver.ui
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -77,6 +80,7 @@ fun SaveToGalleryScreen(vm: SolverViewModel, onDone: () -> Unit) {
             }
         },
         initialDifficulty = state.difficulty, // carry over a rating set on the Results stars
+        hasPhoto = state.imageFile?.exists() == true,
     )
 }
 
@@ -99,6 +103,7 @@ fun SaveToGalleryContent(
     initialFolderId: Long? = null,
     initialDifficulty: Difficulty? = null,
     initialTags: List<String> = emptyList(),
+    hasPhoto: Boolean = true,
 ) {
     val density = LocalDensity.current
     var title by rememberSaveable { mutableStateOf(initialTitle) }
@@ -210,15 +215,25 @@ fun SaveToGalleryContent(
                 AddTagChip { showAddTag = true }
             }
 
-            // Keep photo.
-            Spacer(Modifier.height(12.dp))
-            Row(
-                Modifier.clickable { keepPhoto = !keepPhoto },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                CheckBoxGlyph(keepPhoto)
-                Text("keep the original photo with the note", fontFamily = NotepadFonts.PatrickHand, fontSize = 15.sp, color = NotepadColors.NoteInkYellow)
+            // Keep photo. Unticked, saving deletes the photo from the note and from the phone.
+            // A note that has no photo (already removed, or solved from typed LaTeX) has no choice to offer.
+            if (hasPhoto) {
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier
+                        .heightIn(min = 48.dp)
+                        .toggleable(value = keepPhoto, role = Role.Checkbox, onValueChange = { keepPhoto = it }),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    CheckBoxGlyph(keepPhoto)
+                    Column {
+                        Text("keep the original photo with the note", fontFamily = NotepadFonts.PatrickHand, fontSize = 15.sp, color = NotepadColors.NoteInkYellow)
+                        if (!keepPhoto) {
+                            Text("the photo will be deleted when you save", fontFamily = NotepadFonts.PatrickHand, fontSize = 13.sp, color = NotepadColors.Red)
+                        }
+                    }
+                }
             }
 
             // Actions.

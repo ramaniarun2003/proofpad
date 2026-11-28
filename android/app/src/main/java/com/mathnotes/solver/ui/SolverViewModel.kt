@@ -155,6 +155,8 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
     /** The most recent capture, kept so a failed recognition can be retried from Review. */
     private var lastCapture: PendingCapture? =
         restored?.lastCapture?.let { PendingCapture(File(it.raw), it.crop, it.topicHint) }
+    /** The session [lastCapture] was recognized as, so only that note's save may delete the original. */
+    private var lastCaptureSession: String? = restored?.sessionId?.takeIf { restored.lastCapture != null && it.isNotBlank() }
 
     /**
      * Keep the saved copy current: Android writes the SavedStateHandle out when the app goes to
@@ -307,10 +309,20 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
         saving = true
         _state.update { it.copy(difficulty = difficulty) } // keep the Results stars in sync
         viewModelScope.launch {
+            val hadPhoto = _state.value.imageFile != null
             galleryRepo.saveToGallery(id, folderId, title?.ifBlank { null }, difficulty, tags, keepPhoto)
             val folder = folders.value.firstOrNull { it.folder.id == folderId }?.folder?.name ?: "your gallery"
+            if (!keepPhoto) {
+                // The repository removed the note's stored photo; the camera original in the cache
+                // goes too when it belongs to this note, and nothing on screen may point at either.
+                lastCapture?.takeIf { lastCaptureSession == id }?.let { capture ->
+                    withContext(Dispatchers.IO) { capture.raw.delete() }
+                    lastCapture = null
+                }
+                _state.update { it.copy(imageFile = null) }
+            }
             _state.update { it.copy(savedTo = folder) }
-            notify(UiMessage("Saved to $folder"))
+            notify(UiMessage(if (!keepPhoto && hadPhoto) "Saved to $folder, photo removed" else "Saved to $folder"))
             saving = false
             onDone()
         }
@@ -366,6 +378,7 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
      */
     fun captureAndRecognize(raw: File, crop: CropSpec? = null, topicHint: String = "unknown") {
         lastCapture = PendingCapture(raw, crop, topicHint)
+        lastCaptureSession = null
         // A new capture starts from a clean page: nothing of the previous problem may sit under
         // the new photo while this one is being read, or if reading it fails.
         _state.update {
@@ -387,6 +400,7 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
                 _state.update { it.copy(imageFile = clean, status = "Recognizing…") }
                 val recResult = repo.recognize(clean)
                 val rec = recResult.response
+                lastCaptureSession = rec.sessionId
                 // The backend's Identify split: the problem, then the student's own steps in order.
                 val originalProblem = rec.problemLatex.ifBlank { rec.latex.trim() }
                 val finalSteps = rec.steps

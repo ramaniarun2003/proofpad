@@ -1,5 +1,8 @@
 package com.mathnotes.solver.data.repository
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import java.io.File
 import android.content.Context
 import com.mathnotes.solver.data.db.AppDatabase
 import com.mathnotes.solver.data.db.Difficulty
@@ -84,7 +87,20 @@ class GalleryRepository(context: Context) {
         tags: List<String>,
         keepPhoto: Boolean = true,
         savedAt: Long = System.currentTimeMillis(),
-    ) = dao.saveToGallery(id, folderId, title, difficulty, tags, keepPhoto, savedAt)
+    ) {
+        dao.saveToGallery(id, folderId, title, difficulty, tags, keepPhoto, savedAt)
+        if (!keepPhoto) removePhoto(id)
+    }
+
+    /**
+     * "Keep the original photo" was unticked: the note forgets its photo and the file is deleted,
+     * unless another note still points at the same file.
+     */
+    suspend fun removePhoto(id: String) {
+        val path = sessions.get(id)?.imagePath ?: return
+        sessions.clearImage(id)
+        if (!photoInUse(path)) withContext(Dispatchers.IO) { File(path).delete() }
+    }
 
     companion object {
         const val WEEK_MS = 7L * 24 * 60 * 60 * 1000
