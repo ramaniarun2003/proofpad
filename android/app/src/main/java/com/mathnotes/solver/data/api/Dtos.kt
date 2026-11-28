@@ -22,6 +22,21 @@ data class RecognizeResponse(
     @Json(name = "split_at") val splitAt: String = "",
     // The problem did not parse: still a 200, with no steps; Review asks for a fix.
     @Json(name = "parse_error") val parseError: String? = null,
+    // Every problem found in the capture, top to bottom; the fields above repeat problems[problemIndex].
+    val problems: List<ProblemSplit> = emptyList(),
+    @Json(name = "problem_index") val problemIndex: Int = 0,
+)
+
+/** One problem of a capture that holds several, with its own steps. */
+@JsonClass(generateAdapter = false)
+data class ProblemSplit(
+    @Json(name = "problem_latex") val problemLatex: String,
+    val steps: List<String> = emptyList(),
+    @Json(name = "split_at") val splitAt: String = "",
+    @Json(name = "split_uncertain") val splitUncertain: Boolean = false,
+    @Json(name = "topic_guess") val topicGuess: String = "unknown",
+    @Json(name = "parse_error") val parseError: String? = null,
+    val bbox: List<Int>? = null,
 )
 
 /** A series step is a claim, not an expression: one of these two tokens. */

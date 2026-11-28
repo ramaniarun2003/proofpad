@@ -12,12 +12,17 @@ _REPLACEMENTS: list[tuple[str, str]] = [
     # Limit arrows first — before \right is stripped below (else \rightarrow → "arrow").
     (r"\\longrightarrow|\\rightarrow", r"\\to"),
     (r"\\operatorname\{lim\}", r"\\lim"),
+    # Handwritten limits come back without the subscript (`\\lim x \\to 0 \\frac{…}{…}`): rebuild it.
+    (r"\\lim\s+([a-zA-Z])\s*\\to\s*([+-]?\s*(?:\\infty|\\pi|\d+(?:\.\d+)?|[a-zA-Z])(?:\s*\^\s*(?:\{\s*[+-]\s*\}|[+-]))?)",
+     r"\\lim_{\1 \\to \2} "),
     (r"\\left", ""),
     (r"\\right", ""),
     (r"\\,|\\;|\\:|\\!|\\quad|\\qquad|~", " "),
     (r"\\dfrac|\\tfrac", r"\\frac"),
     # "d/dx" written with a slash (Mathpix: `d / d x \\sin (3 x)`) → the \\frac form the parser reads.
     (r"(?<![a-zA-Z\\\\])d\s*/\s*d\s*([a-zA-Z])(?![a-zA-Z])", r"\\frac{d}{d\1} "),
+    # The same for a partial written with a slash: `\\partial / \\partial x (…)`.
+    (r"\\partial\s*/\s*\\partial\s*([a-zA-Z])(?![a-zA-Z])", r"\\frac{\\partial}{\\partial \1} "),
     (r"\\displaystyle", ""),
     (r"\\mathrm\{d\}", "d"),
     (r"\\operatorname\{d\}", "d"),
@@ -39,7 +44,7 @@ _SCRIPT = re.compile(r"\s*([_^])\s*(\{(?:[^{}]|\{[^{}]*\})*\}|\\[a-zA-Z]+|[^\s\\
 
 
 def add_sum_bounds(latex: str) -> str:
-    """
+    r"""
     Give every `\sum` written without bounds the usual ones: `\sum \frac{1}{n^2}` →
     `\sum_{n=1}^{\infty} \frac{1}{n^2}`. The index is the first of n, k, i that appears in the
     string as a variable (default n). A lower bound with no start (`\sum_{k}`) starts at 1, and a

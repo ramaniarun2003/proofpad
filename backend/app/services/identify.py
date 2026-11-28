@@ -10,6 +10,8 @@ splits it so the Review screen can show the problem and each step separately.
    with a separator continues the previous chain.
 2. The problem is the first segment containing an operator we solve (d/dx, ', ∫, Σ, lim, ∂).
 3. Every segment after it — same line or later lines — is a student step, in order.
+4. A later line that begins with an operator opens a new problem, so a page of several problems
+   comes back as several (problem, steps) pairs in `problems`.
 
 A series is different: the problem is only the `\\sum …` part (bounds added when missing), and the
 student's step is a claim, normalized to the token `CONVERGES` or `DIVERGES`.
@@ -73,6 +75,11 @@ class Identified:
     segments: list[Segment] = field(default_factory=list)
     split_uncertain: bool = False
     split_at: str = ""              # separator before the first step ("=", "⇒", …, "line"); "" when not split
+    bbox: list[int] | None = None   # the lines of this problem, when known
+    # A capture holding several problems: one entry per problem, top to bottom. The fields above
+    # are those of `problems[primary]`. Empty when the capture has no operator at all.
+    problems: list["Identified"] = field(default_factory=list)
+    primary: int = 0
 
 
 def has_operator(latex: str) -> bool:
@@ -80,7 +87,7 @@ def has_operator(latex: str) -> bool:
 
 
 def split_top_level(latex: str) -> list[tuple[str, str]]:
-    """
+    r"""
     Split on claim separators at brace depth 0 and outside `\left…\right`. Returns
     (piece, separator before it); the first piece's separator is "". Empty pieces are kept so a
     caller can tell a leading separator (continuation line) from a normal one.
@@ -172,7 +179,7 @@ def normalize_claim(text: str) -> str | None:
 
 
 def _series_split(segments: list[Segment], problem_at: int) -> tuple[str, list[str], str] | None:
-    """
+    r"""
     For a `\sum` problem: (problem, [claim], split_at), or None when the student wrote no claim
     (the caller then keeps the ordinary split). The problem is only the `\sum …` part; any other
     `\text{…}` in it is dropped and logged.
@@ -247,28 +254,71 @@ def identify(lines: list[tuple[str, list[int] | None]] | list[str] | str) -> Ide
     ]
     rows = [(_clean(text), bbox) for text, bbox in rows if _clean(text)]
 
-    segments: list[Segment] = []
+    # One group of lines per problem (see _starts_problem), then the ordinary split inside each.
+    groups: list[list[Segment]] = []
     for line_no, (text, bbox) in enumerate(rows):
-        for piece, sep in split_top_level(text):
-            piece = _clean(piece)
-            if piece:   # a leading "=" leaves an empty first piece: the line continues the chain
-                segments.append(Segment(latex=piece, line=line_no, bbox=bbox, sep=sep))
+        pieces = [(_clean(piece), sep) for piece, sep in split_top_level(text)]
+        # A leading "=" leaves an empty first piece: the line continues the chain.
+        continues = not pieces[0][0]
+        line = [Segment(latex=piece, line=line_no, bbox=bbox, sep=sep) for piece, sep in pieces if piece]
+        if not line:
+            continue
+        if not groups or (not continues and _starts_problem(line[0].latex)):
+            groups.append([])
+        groups[-1].extend(line)
 
-    full = " \\\\ ".join(text for text, _ in rows)
-    problem_at = next((i for i, seg in enumerate(segments) if has_operator(seg.latex)), None)
-    if problem_at is None:
+    segments = [seg for group in groups for seg in group]
+    if not any(has_operator(seg.latex) for seg in segments):
         # Nothing we know how to solve: keep today's behaviour (everything is the problem).
+        full = " \\\\ ".join(text for text, _ in rows)
         return Identified(problem_latex=full, steps=[], segments=segments, split_uncertain="=" in full
                           and len(segments) > 1)
+
+    problems = [_identify_group(group, [text for text, _ in rows]) for group in groups]
+    # The capture's own problem is the first one with an operator; a misread line above it
+    # (no operator) is still listed, so the student can pick and fix it.
+    primary = next(i for i, group in enumerate(groups) if any(has_operator(seg.latex) for seg in group))
+    first = problems[primary]
+    return Identified(problem_latex=first.problem_latex, steps=first.steps, segments=segments,
+                      split_uncertain=first.split_uncertain, split_at=first.split_at, bbox=first.bbox,
+                      problems=problems, primary=primary)
+
+
+def _starts_problem(latex: str) -> bool:
+    r"""
+    Does a line open a new problem? Yes when it begins with an operator we solve (`\int …`,
+    `\frac{d}{dx} …`, `\sum …`, `\lim …`, `∂/∂x …`). A line that merely contains one further in
+    (`x e^{x} - \int e^{x} dx`) or that starts with a separator (`= …`) is working for the problem above.
+    """
+    return bool(_OPERATOR.match(latex.lstrip(" ({[")))
+
+
+def _union(boxes: list[list[int] | None]) -> list[int] | None:
+    known = [b for b in boxes if b]
+    if not known:
+        return None
+    return [min(b[0] for b in known), min(b[1] for b in known), max(b[2] for b in known), max(b[3] for b in known)]
+
+
+def _identify_group(segments: list[Segment], rows: list[str]) -> Identified:
+    """Problem and steps for the lines of one problem; `rows` is every line of the capture as read."""
+    bbox = _union([seg.bbox for seg in segments])
+    problem_at = next((i for i, seg in enumerate(segments) if has_operator(seg.latex)), None)
+    if problem_at is None:
+        # No operator (a misread, or a bare expression): the lines as read, nothing split off.
+        full = " \\\\ ".join(rows[n] for n in sorted({seg.line for seg in segments}))
+        return Identified(problem_latex=full, steps=[], segments=segments, bbox=bbox,
+                          split_uncertain=any(seg.sep == "=" for seg in segments))
     if re.search(r"\\sum(?![a-zA-Z])", segments[problem_at].latex):
         series = _series_split(segments, problem_at)
         if series is not None:
             problem, steps, split_at = series
-            return Identified(problem_latex=problem, steps=steps, segments=segments, split_at=split_at)
+            return Identified(problem_latex=problem, steps=steps, segments=segments, split_at=split_at, bbox=bbox)
     steps = segments[problem_at + 1:]
     return Identified(
         problem_latex=segments[problem_at].latex,
         steps=[seg.latex for seg in steps],
         segments=segments,
         split_at=(steps[0].sep or "line") if steps else "",
+        bbox=bbox,
     )

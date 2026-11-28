@@ -78,7 +78,13 @@ class SolverRepository(context: Context) {
         val steps = resp.steps.map { if (Claim.isClaim(it)) it else correctLatex(it, resp.confidence) }
         Timber.i("recognize split: problem=%s | steps=%s | at=%s | uncertain=%s | parse_error=%s",
             problem, steps, resp.splitAt, resp.splitUncertain, resp.parseError)
-        RecognizeResult(resp.copy(latex = corrected, problemLatex = problem, steps = steps), rawLatex = resp.latex)
+        val problems = resp.problems.map { p ->
+            p.copy(
+                problemLatex = correctLatex(p.problemLatex, resp.confidence),
+                steps = p.steps.map { if (Claim.isClaim(it)) it else correctLatex(it, resp.confidence) },
+            )
+        }
+        RecognizeResult(resp.copy(latex = corrected, problemLatex = problem, steps = steps, problems = problems), rawLatex = resp.latex)
     }
 
     /** Upload a whole page (mode=page): per-line LaTeX + pixel bboxes. Never persisted to History. */

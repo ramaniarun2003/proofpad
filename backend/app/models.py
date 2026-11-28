@@ -22,6 +22,17 @@ class Segment(BaseModel):
     bbox: Optional[list[int]] = None  # the source line's [x0, y0, x1, y1], when Mathpix gave one
 
 
+class ProblemSplit(BaseModel):
+    """One problem of a capture that holds several, with its own steps."""
+    problem_latex: str
+    steps: list[str] = []
+    split_at: str = ""
+    split_uncertain: bool = False
+    topic_guess: Topic = Topic.unknown
+    parse_error: Optional[str] = None
+    bbox: Optional[list[int]] = None  # the lines of this problem, [x0, y0, x1, y1]
+
+
 class RecognizeResponse(BaseModel):
     session_id: str
     latex: str                       # the full recognized string (problem and working together)
@@ -39,6 +50,10 @@ class RecognizeResponse(BaseModel):
     # Set when the problem could not be parsed. The response is still 200, with `steps` empty,
     # so Review can ask the student to fix the LaTeX.
     parse_error: Optional[str] = None
+    # Every problem found, top to bottom (a line that begins with an operator opens a new one).
+    # The fields above repeat `problems[problem_index]`. One entry for an ordinary capture.
+    problems: list[ProblemSplit] = []
+    problem_index: int = 0
 
 
 class PageLine(BaseModel):

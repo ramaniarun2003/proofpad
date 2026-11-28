@@ -1,0 +1,54 @@
+{
+  "request_id": "2e091340-ac9e-4048-85fe-d55cc4fbb8fa",
+  "version": "SuperNet-202",
+  "is_printed": false,
+  "is_handwritten": true,
+  "auto_rotate_confidence": 7.123366480010773e-11,
+  "auto_rotate_degrees": 0,
+  "image_height": 974,
+  "image_width": 1600,
+  "parse_status": "parsed",
+  "fallback_count": 0,
+  "page_confidence": {
+    "confidence": 0.8217451572418213,
+    "text_confidence": null,
+    "layout_confidence": 0.8217451572418213,
+    "method": "prototype_min_v1"
+  },
+  "confidence": 0.4266027384554842,
+  "confidence_rate": 0.9947551478670356,
+  "latex_styled": "\\begin{array}{l}\nd / d x x^{2} \\sin x=2 x \\sin x-x^{2} \\cos x \\\\\n\\lim x \\rightarrow 0 \\frac{\\ln (1+x)}{x}=1 \\\\\n\\sum \\frac{1}{n^{2}} \\Rightarrow \\text { converges } \\\\\n\\partial / \\partial x\\left(x^{2} y+y^{3}\\right)=2 x y+3 y^{2}\n\\end{array}",
+  "text": "$\\begin{array}{l}d / d x x^{2} \\sin x=2 x \\sin x-x^{2} \\cos x \\\\ \\lim x \\rightarrow 0 \\frac{\\ln (1+x)}{x}=1 \\\\ \\sum \\frac{1}{n^{2}} \\Rightarrow \\text { converges } \\\\ \\partial / \\partial x\\left(x^{2} y+y^{3}\\right)=2 x y+3 y^{2}\\end{array}$",
+  "line_data": [
+    {
+      "type": "math",
+      "cnt": [
+        [
+          97,
+          56
+        ],
+        [
+          1446,
+          56
+        ],
+        [
+          1446,
+          818
+        ],
+        [
+          97,
+          818
+        ]
+      ],
+      "included": true,
+      "conversion_output": true,
+      "is_printed": false,
+      "is_handwritten": true,
+      "id": "0b09400928b64115b145857dbe6ab71f",
+      "text": "$\\begin{array}{l}d / d x x^{2} \\sin x=2 x \\sin x-x^{2} \\cos x \\\\ \\lim x \\rightarrow 0 \\frac{\\ln (1+x)}{x}=1 \\\\ \\sum \\frac{1}{n^{2}} \\Rightarrow \\text { converges } \\\\ \\partial / \\partial x\\left(x^{2} y+y^{3}\\right)=2 x y+3 y^{2}\\end{array}$",
+      "after_hyphen": false,
+      "confidence": 0.4266027384554842,
+      "confidence_rate": 0.9947551478670356
+    }
+  ]
+}

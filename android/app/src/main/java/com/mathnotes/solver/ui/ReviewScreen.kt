@@ -124,6 +124,17 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
             state.error?.let { NotepadLabel(it, fontSize = 16, color = NotepadColors.Red) }
 
             if (state.latex.isNotEmpty()) {
+                // A page of several problems: one is loaded, the others are a tap away.
+                if (state.problems.size > 1) {
+                    NotepadLabel("I found ${state.problems.size} problems here, which one?", fontSize = 16)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        state.problems.indices.forEach { i ->
+                            TopicPill("${i + 1}", selected = i == state.problemIndex, modifier = Modifier.weight(1f)) {
+                                vm.selectProblem(i)
+                            }
+                        }
+                    }
+                }
                 // "I read this as" + the typeset reading, with a confidence pill.
                 Row(
                     Modifier.fillMaxWidth(),

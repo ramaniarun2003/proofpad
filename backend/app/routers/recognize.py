@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import SessionRow, get_db
-from ..models import PageLine, PageRecognizeResponse, RecognizeResponse, Segment, Topic
+from ..models import PageLine, PageRecognizeResponse, ProblemSplit, RecognizeResponse, Segment
 from ..services import identify, recognition
 from ..services.symbolic import ParseError, parse
 
@@ -62,17 +62,12 @@ async def recognize(
 
     row = SessionRow(id=session_id, device_id=device_id, image_path=str(path),
                      recognized_latex=result.latex, confidence=result.confidence)
-    # A reading the parser rejects is still a 200: Review shows it and asks for a fix.
-    fields = _split_fields(split)
-    topic_guess, parse_error = Topic.unknown, None
-    try:
-        topic_guess = parse(split.problem_latex).topic
-    except ParseError as exc:
-        parse_error = str(exc)
-        fields.update(steps=[], split_at="")
+    found = split.problems or [split]
+    problems = [_problem(p) for p in found]
+    chosen = problems[split.primary]
     row.log("recognize", confidence=result.confidence, stub=settings.STUB_RECOGNITION,
-            steps=len(split.steps), split_uncertain=split.split_uncertain, split_at=split.split_at,
-            parse_error=parse_error)
+            steps=len(chosen.steps), split_uncertain=chosen.split_uncertain, split_at=chosen.split_at,
+            parse_error=chosen.parse_error, problems=len(problems))
     db.add(row)
     db.commit()
 
@@ -80,11 +75,24 @@ async def recognize(
         session_id=session_id,
         latex=result.latex,
         confidence=result.confidence,
-        topic_guess=topic_guess,
         low_confidence=result.confidence < settings.LOW_CONFIDENCE,
-        parse_error=parse_error,
-        **fields,
+        segments=[Segment(latex=s.latex, line=s.line, bbox=s.bbox) for s in split.segments],
+        problems=problems,
+        problem_index=split.primary,
+        **chosen.model_dump(exclude={"bbox"}),
     )
+
+
+def _problem(split: identify.Identified) -> ProblemSplit:
+    """One problem with its topic. A reading the parser rejects keeps its LaTeX and loses its steps."""
+    out = ProblemSplit(problem_latex=split.problem_latex, steps=split.steps, split_at=split.split_at,
+                       split_uncertain=split.split_uncertain, bbox=split.bbox)
+    try:
+        out.topic_guess = parse(split.problem_latex).topic
+    except ParseError as exc:
+        out.parse_error = str(exc)
+        out.steps, out.split_at = [], ""
+    return out
 
 
 def _split_fields(split: identify.Identified) -> dict:

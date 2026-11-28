@@ -203,3 +203,15 @@ def test_trailing_junk_is_a_parse_error(latex):
 ])
 def test_strict_parsing_still_accepts_ordinary_input(latex, expected):
     assert str(parse(latex).expr) == expected
+
+
+@pytest.mark.parametrize("latex, expected", [
+    # Mathpix's reading of handwriting: the limit without its subscript, the partial with a slash
+    (r"\lim x \rightarrow 0 \frac{\ln (1+x)}{x}", "Limit(log(x + 1)/x, x, 0, dir='+-')"),
+    (r"\operatorname{lim} x \to \infty \frac{1}{x}", "Limit(1/x, x, oo, dir='-')"),
+    (r"\lim x \to 0^{+} \frac{1}{x}", "Limit(1/x, x, 0, dir='+')"),
+    (r"\lim_{x \to 0} \frac{\sin x}{x}", "Limit(sin(x)/x, x, 0, dir='+-')"),
+    (r"\partial / \partial x\left(x^{2} y+y^{3}\right)", "Derivative(x**2*y + y**3, x)"),
+])
+def test_handwritten_operator_forms_parse(latex, expected):
+    assert str(parse(latex).expr) == expected

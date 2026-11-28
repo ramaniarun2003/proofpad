@@ -8,6 +8,7 @@ import com.mathnotes.solver.data.api.ApiClient
 import com.mathnotes.solver.data.api.BackendLocator
 import com.mathnotes.solver.data.api.BackendState
 import com.mathnotes.solver.data.api.Claim
+import com.mathnotes.solver.data.api.ProblemSplit
 import com.mathnotes.solver.data.WelcomePrefs
 import com.mathnotes.solver.data.api.SolveResponse
 import com.mathnotes.solver.data.api.Step
@@ -56,6 +57,11 @@ data class SolverUiState(
     val difficulty: Difficulty? = null,
     /** The student's own working, one LaTeX step per row (prefilled from the Identify split). */
     val userSteps: List<String> = emptyList(),
+    /** Every problem found in the capture (more than one for a page of problems) and the one loaded. */
+    val problems: List<ProblemSplit> = emptyList(),
+    val problemIndex: Int = 0,
+    /** The topic chip chosen on the capture screen ("unknown" = Auto); it wins over each problem's guess. */
+    val topicHint: String = "unknown",
     /** What the capture was split at ("=", "⇒", "line", …); empty when it was not split. */
     val splitAt: String = "",
     /** The problem did not parse (at recognition, or when Solve / Check was tapped): yellow note on Review. */
@@ -293,6 +299,9 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                         splitAt = if (finalSteps.isEmpty()) "" else rec.splitAt.ifBlank { "=" },
                         parseError = rec.parseError,
                         splitUncertain = rec.splitUncertain,
+                        problems = rec.problems,
+                        problemIndex = rec.problemIndex,
+                        topicHint = topicHint,
                         suggestions = suggestions,
                         rawLatex = recResult.rawLatex,
                     )
@@ -307,6 +316,28 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                     _state.update { it.copy(busy = false, status = "", error = describe(e)) }
                 }
             }
+        }
+    }
+
+    /** A capture with several problems: load another one into Review (edits to the current one are dropped). */
+    fun selectProblem(index: Int) {
+        val p = _state.value.problems.getOrNull(index) ?: return
+        _state.update {
+            it.copy(
+                problemIndex = index,
+                latex = p.problemLatex,
+                userSteps = p.steps,
+                splitAt = if (p.steps.isEmpty()) "" else p.splitAt.ifBlank { "=" },
+                splitUncertain = p.splitUncertain,
+                parseError = p.parseError,
+                topic = if (it.topicHint != "unknown") it.topicHint else p.topicGuess,
+                suggestions = emptyList(),
+                error = null,
+            )
+        }
+        viewModelScope.launch {
+            val suggestions = repo.suggestionsFor(p.problemLatex)
+            _state.update { if (it.problemIndex == index && it.latex == p.problemLatex) it.copy(suggestions = suggestions) else it }
         }
     }
 

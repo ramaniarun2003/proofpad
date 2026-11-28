@@ -63,4 +63,22 @@ class SplitCaptionTest {
         assertEquals("p-series", resp.solutionSteps.single().rule)
         assertEquals("our p-series test says it diverges", resp.steps.single().hint)
     }
+
+    @Test fun recognize_response_reads_every_problem_of_a_page() {
+        val resp = ApiClient.moshi.adapter(RecognizeResponse::class.java).fromJson(
+            """{"session_id":"s","latex":"x","confidence":0.9,"topic_guess":"series","low_confidence":false,
+               "problem_latex":"b","steps":["CONVERGES"],"problem_index":1,
+               "problems":[{"problem_latex":"a","steps":[],"topic_guess":"unknown","split_uncertain":true},
+                           {"problem_latex":"b","steps":["CONVERGES"],"split_at":"⇒","topic_guess":"series","bbox":[1,2,3,4]}]}"""
+        )!!
+        assertEquals(listOf("a", "b"), resp.problems.map { it.problemLatex })
+        assertEquals(1, resp.problemIndex)
+        assertEquals("series", resp.problems[1].topicGuess)
+        assertEquals(listOf(1, 2, 3, 4), resp.problems[1].bbox)
+        // An older backend sends no list: the single problem is the top-level one.
+        val old = ApiClient.moshi.adapter(RecognizeResponse::class.java).fromJson(
+            """{"session_id":"s","latex":"x","confidence":0.9,"topic_guess":"series","low_confidence":false}"""
+        )!!
+        assertTrue(old.problems.isEmpty())
+    }
 }

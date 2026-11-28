@@ -248,3 +248,86 @@ def test_handwritten_integral_without_working_has_no_steps(monkeypatch, tmp_path
     assert body["steps"] == []
     assert body["topic_guess"] == "integral"
     assert body["split_uncertain"] is False
+
+
+# --- Several problems in one capture ------------------------------------------------------------
+
+def _problems(capture):
+    return [(p.problem_latex, p.steps) for p in identify(capture).problems]
+
+
+def test_each_line_that_begins_with_an_operator_is_its_own_problem():
+    got = identify([
+        r"\frac{d}{dx} x^2 = 2x",
+        r"\int 2x\,dx = x^2 + C",
+        r"\sum \frac{1}{n^2} \Rightarrow \text{converges}",
+        r"\lim_{x \to 0} \frac{\sin x}{x}",
+    ])
+    assert [(p.problem_latex, p.steps, p.split_at) for p in got.problems] == [
+        (r"\frac{d}{dx} x^2", ["2x"], "="),
+        (r"\int 2x\,dx", ["x^2 + C"], "="),
+        (r"\sum_{n=1}^{\infty} \frac{1}{n^2}", ["CONVERGES"], "⇒"),
+        (r"\lim_{x \to 0} \frac{\sin x}{x}", [], ""),
+    ]
+    # The top-level fields are the first problem's, with only its own steps.
+    assert (got.primary, got.problem_latex, got.steps) == (0, r"\frac{d}{dx} x^2", ["2x"])
+
+
+@pytest.mark.parametrize("capture, problem, steps", [
+    # a continuation line starts with "="
+    ([r"\frac{d}{dx} x^2 \sin x", r"= \frac{d}{dx}(x^2) \sin x + x^2 \frac{d}{dx} \sin x", r"= 2x \sin x + x^2 \cos x"],
+     r"\frac{d}{dx} x^2 \sin x", [r"\frac{d}{dx}(x^2) \sin x + x^2 \frac{d}{dx} \sin x", r"2x \sin x + x^2 \cos x"]),
+    # an operator further into a working line does not open a problem
+    ([r"\int x e^{x} dx", r"x e^{x} - \int e^{x} dx", r"x e^x - e^x + C"],
+     r"\int x e^{x} dx", [r"x e^{x} - \int e^{x} dx", r"x e^x - e^x + C"]),
+])
+def test_working_lines_stay_with_their_problem(capture, problem, steps):
+    assert _problems(capture) == [(problem, steps)]
+
+
+def test_bboxes_cover_each_problems_own_lines():
+    got = identify([
+        (r"\int x^2 dx", [10, 20, 300, 80]), (r"= \frac{x^3}{3} + C", [10, 100, 320, 160]),
+        (r"\frac{d}{dx} x^3 = 3x^2", [10, 200, 300, 260]),
+    ])
+    assert [p.bbox for p in got.problems] == [[10, 20, 320, 160], [10, 200, 300, 260]]
+    assert [s.line for s in got.segments] == [0, 1, 2, 2]
+
+
+def test_a_line_without_an_operator_above_the_first_problem_is_listed_but_not_chosen():
+    got = identify([r"\operatorname{lime} x \rightarrow 0 \frac{\ln (1+x)}{x}=1", r"\int x^2 dx = \frac{x^3}{3} + C"])
+    assert [(p.problem_latex, p.steps, p.split_uncertain) for p in got.problems] == [
+        (r"\operatorname{lime} x \rightarrow 0 \frac{\ln (1+x)}{x}=1", [], True),
+        (r"\int x^2 dx", [r"\frac{x^3}{3} + C"], False),
+    ]
+    assert (got.primary, got.problem_latex) == (1, r"\int x^2 dx")
+
+
+def test_capture_without_any_operator_has_no_problem_list():
+    got = identify([r"x^2 + 1", r"= 5"])
+    assert got.problems == [] and got.problem_latex == r"x^2 + 1 \\ = 5"
+
+
+@pytest.mark.parametrize("name, primary, expected", [
+    # 17:57 — line 1 misread as "lime"; 17:54 — the same page framed one line higher.
+    ("handwritten_series_claim", 1, [
+        (r"\operatorname{lime} x \rightarrow 0 \quad \frac{\ln (1+x)}{x}=1", [], "unknown"),
+        (r"\sum_{n=1}^{\infty} \frac{1}{n^{2}}", ["CONVERGES"], "series"),
+        (r"\partial / \partial x\left(x^{2} y+y^{3}\right)", [r"2 x y+3 y^{2}"], "derivative"),
+        (r"\int x^{2} d x", [], "integral"),
+    ]),
+    ("handwritten_page_four_problems", 0, [
+        (r"d / d x x^{2} \sin x", [r"2 x \sin x-x^{2} \cos x"], "derivative"),
+        (r"\lim x \rightarrow 0 \frac{\ln (1+x)}{x}", ["1"], "limit"),
+        (r"\sum_{n=1}^{\infty} \frac{1}{n^{2}}", ["CONVERGES"], "series"),
+        (r"\partial / \partial x\left(x^{2} y+y^{3}\right)", [r"2 x y+3 y^{2}"], "derivative"),
+    ]),
+])
+def test_todays_notebook_page_gives_one_problem_per_line(monkeypatch, tmp_path, name, primary, expected):
+    body = _recognize_fixture(monkeypatch, tmp_path, name)
+    assert [(p["problem_latex"], p["steps"], p["topic_guess"]) for p in body["problems"]] == expected
+    assert body["problem_index"] == primary
+    chosen = body["problems"][primary]
+    assert (body["problem_latex"], body["steps"], body["topic_guess"]) == (
+        chosen["problem_latex"], chosen["steps"], chosen["topic_guess"])
+    assert all(p["bbox"] for p in body["problems"])

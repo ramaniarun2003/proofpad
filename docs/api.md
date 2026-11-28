@@ -36,6 +36,11 @@ empty, and `split_uncertain` is true if there were `=` signs. `mode=page` return
   missing (index n, k or i taken from the term, default n). The step is a claim, normalized to the token
   `CONVERGES` or `DIVERGES`: `\\sum \\frac{1}{n^{2}} \\Rightarrow \\text { converges }` gives
   `problem_latex: "\\sum_{n=1}^{\\infty} \\frac{1}{n^{2}}"`, `steps: ["CONVERGES"]`, `split_at: "⇒"`.
+- **Several problems in one capture**: a line that begins with an operator opens a new problem; a line
+  that starts with a separator (`= …`) or only contains an operator further in is working for the problem
+  above. `problems` lists every one, top to bottom, each as `{problem_latex, steps, split_at,
+  split_uncertain, topic_guess, parse_error, bbox}`; the top-level fields repeat `problems[problem_index]`,
+  the first one with an operator. A capture with no operator at all has a single entry.
 - `parse_error`: set when `problem_latex` does not parse. The response is still `200`, with `steps`
   empty, so Review can ask for a fix. `null` otherwise.
 
