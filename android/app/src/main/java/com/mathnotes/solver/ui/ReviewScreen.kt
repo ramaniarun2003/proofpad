@@ -52,7 +52,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
 import coil.compose.AsyncImage
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
+import com.mathnotes.solver.data.api.BackendState
+import com.mathnotes.solver.ui.components.BackendSheet
+import com.mathnotes.solver.ui.components.BackendStatusChip
 import com.mathnotes.solver.data.api.Claim
 import com.mathnotes.solver.ui.components.NotepadBottomBar
 import com.mathnotes.solver.ui.components.NotepadHeader
@@ -82,6 +88,32 @@ private val TOPIC_OPTIONS = listOf("Integrate" to "integral", "Differentiate" to
 fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit) {
     val state by vm.state.collectAsState()
     LaunchedEffect(state.result) { if (state.result != null) onSolved() }
+
+    // Recognition failed: the error note below offers Retry and the connection chip + sheet.
+    val backendState by vm.backend.collectAsState()
+    var showBackendSheet by remember { mutableStateOf(false) }
+    val qrScanner = rememberLauncherForActivityResult(ScanContract()) { result ->
+        result.contents?.let { vm.setBackendUrl(it) }
+    }
+    // The connection came back while the note is up: send the kept photo again.
+    LaunchedEffect(backendState, state.recognizeError) {
+        if (state.recognizeError == CANT_REACH_NOTE && backendState is BackendState.Connected) vm.retryRecognize()
+    }
+    if (showBackendSheet) {
+        BackendSheet(
+            state = backendState,
+            savedUrl = vm.savedBackendUrl,
+            onSearchAgain = vm::searchBackend,
+            onScanQr = {
+                qrScanner.launch(
+                    ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                        .setPrompt("Scan the backend QR from the terminal").setBeepEnabled(false).setOrientationLocked(false),
+                )
+            },
+            onSaveUrl = vm::setBackendUrl,
+            onDismiss = { showBackendSheet = false },
+        )
+    }
 
     Column(Modifier.fillMaxSize()) {
         NotepadHeader(title = "Check my reading", trailing = "step 2 of 3")
@@ -122,6 +154,22 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
             }
 
             state.error?.let { NotepadLabel(it, fontSize = 16, color = NotepadColors.Red) }
+
+            state.recognizeError?.let { message ->
+                StickyNote(Modifier.fillMaxWidth(0.94f), background = NotepadColors.StickyPink, rotationDeg = -1f) {
+                    Text("I couldn't read this yet", fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp, color = NotepadColors.NoteInkPink)
+                    Text(message, fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.NoteInkPink)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Button(
+                        onClick = vm::retryRecognize,
+                        modifier = Modifier.height(48.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),
+                    ) { Text("Retry", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
+                    BackendStatusChip(backendState, onClick = { showBackendSheet = true }, onPaper = true)
+                }
+            }
 
             if (state.latex.isNotEmpty()) {
                 // A page of several problems: one is loaded, the others are a tap away.
@@ -169,7 +217,7 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
                 if (state.parseError != null) {
                     StickyNote(Modifier.fillMaxWidth(0.92f), rotationDeg = -1f) {
                         Text(
-                            PARSE_ERROR_NOTE,
+                            parseNote(state.parseError),
                             fontFamily = NotepadFonts.PatrickHand,
                             fontSize = 15.sp,
                             color = NotepadColors.NoteInkYellow,
@@ -279,7 +327,7 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
 
             Button(
                 onClick = vm::verify,
-                enabled = state.latex.isNotBlank(),
+                enabled = state.latex.isNotBlank() && !state.busy,
                 modifier = Modifier.weight(1.4f).height(48.dp),
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),

@@ -96,6 +96,8 @@ object Verdict {
     const val VERIFIED = "verified"
     const val MISMATCH = "mismatch"
     const val INCOMPLETE = "incomplete"
+    /** App-side only: a capture that was read but never solved or checked (opened from My notebook). */
+    const val UNSOLVED = "unsolved"
 
     /** Stored sessions keep (verified, mismatchAt): false with no flagged step means "almost". */
     fun of(verified: Boolean?, mismatchAt: Int?): String = when {

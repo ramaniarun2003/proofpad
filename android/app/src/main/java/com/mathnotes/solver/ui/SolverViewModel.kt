@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import com.mathnotes.solver.export.PdfExporter
 import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
@@ -57,6 +58,14 @@ data class SolverUiState(
     val difficulty: Difficulty? = null,
     /** The student's own working, one LaTeX step per row (prefilled from the Identify split). */
     val userSteps: List<String> = emptyList(),
+    /** A PDF is being written; the export buttons show progress and are disabled. */
+    val exporting: Boolean = false,
+    /** A finished PDF waiting to be handed to the share sheet (Results does it, then clears this). */
+    val exportedFile: File? = null,
+    /** Writing the PDF failed: Results shows the error sheet with Retry. */
+    val exportFailed: Boolean = false,
+    /** The folder this note was last saved to, once it has been; Results shows it on the save button. */
+    val savedTo: String? = null,
     /** Every problem found in the capture (more than one for a page of problems) and the one loaded. */
     val problems: List<ProblemSplit> = emptyList(),
     val problemIndex: Int = 0,
@@ -64,6 +73,11 @@ data class SolverUiState(
     val topicHint: String = "unknown",
     /** What the capture was split at ("=", "⇒", "line", …); empty when it was not split. */
     val splitAt: String = "",
+    /**
+     * Recognition failed (no connection, or the solver answered with an error): what Review says
+     * in its error note. The photo is kept and [SolverViewModel.retryRecognize] sends it again.
+     */
+    val recognizeError: String? = null,
     /** The problem did not parse (at recognition, or when Solve / Check was tapped): yellow note on Review. */
     val parseError: String? = null,
     /** `=` signs but no operator found: the problem field may hold the student's work too. */
@@ -83,6 +97,20 @@ private const val BACKEND_URL_PREF = "backend_url"
 
 /** A photo taken while the backend was unreachable, retried automatically once connected. */
 private data class PendingCapture(val raw: File, val crop: CropSpec?, val topicHint: String)
+
+/**
+ * A short notice shown at the bottom of whatever screen is up (MainActivity hosts it), with an
+ * optional action such as Undo. It stays for [UiMessage.MILLIS], then [onDismissed] runs unless
+ * the action was taken.
+ */
+data class UiMessage(
+    val text: String,
+    val actionLabel: String? = null,
+    val onAction: (() -> Unit)? = null,
+    val onDismissed: (() -> Unit)? = null,
+) {
+    companion object { const val MILLIS = 5_000L }
+}
 
 /** One-shot signals the capture flow sends to the UI. */
 sealed interface CaptureEvent {
@@ -113,7 +141,14 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _captureEvents = MutableSharedFlow<CaptureEvent>(extraBufferCapacity = 4)
     val captureEvents = _captureEvents.asSharedFlow()
+    private var saving = false
+    private val _messages = MutableSharedFlow<UiMessage>(extraBufferCapacity = 8)
+    val messages = _messages.asSharedFlow()
+    fun notify(message: UiMessage) { _messages.tryEmit(message) }
+
     private var pending: PendingCapture? = null
+    /** The most recent capture, kept so a failed recognition can be retried from Review. */
+    private var lastCapture: PendingCapture? = null
 
     init {
         // When the backend comes up and a photo is waiting, recognize it automatically.
@@ -191,7 +226,44 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     fun setFolderTopic(topic: String?) = _folderFilter.update { it.copy(topic = topic) }
     fun setFolderDifficulty(d: Difficulty?) = _folderFilter.update { it.copy(difficulty = d) }
     fun renameFolder(id: Long, name: String) { viewModelScope.launch { galleryRepo.renameFolder(id, name) } }
-    fun deleteFolder(id: Long) { viewModelScope.launch { galleryRepo.deleteFolder(id) } }
+
+    /** Delete a folder (its notes stay, unfiled) and offer Undo for a few seconds. */
+    fun deleteFolder(id: Long) {
+        viewModelScope.launch {
+            val deleted = galleryRepo.deleteFolderForUndo(id) ?: return@launch
+            notify(
+                UiMessage(
+                    text = "Deleted ${deleted.folder.name}",
+                    actionLabel = "Undo",
+                    onAction = { viewModelScope.launch { galleryRepo.restoreFolder(deleted) } },
+                ),
+            )
+        }
+    }
+
+    /**
+     * Delete a note and offer Undo. The photo file is only removed once the notice has gone
+     * without Undo, and only if no other note uses it.
+     */
+    fun deleteNote(note: SessionEntity) {
+        viewModelScope.launch {
+            galleryRepo.deleteNote(note.sessionId)
+            if (_state.value.sessionId == note.sessionId) _state.update { SolverUiState() }
+            notify(
+                UiMessage(
+                    text = "Deleted the note",
+                    actionLabel = "Undo",
+                    onAction = { viewModelScope.launch { galleryRepo.restoreNote(note) } },
+                    onDismissed = {
+                        viewModelScope.launch(Dispatchers.IO) {
+                            val path = note.imagePath ?: return@launch
+                            if (!galleryRepo.photoInUse(path)) File(path).delete()
+                        }
+                    },
+                ),
+            )
+        }
+    }
 
     fun createFolder(name: String, colorIndex: Int, term: String? = null) {
         viewModelScope.launch { galleryRepo.createFolder(name, colorIndex, term) }
@@ -214,9 +286,15 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         val id = _state.value.sessionId
         if (id.isBlank()) { onDone(); return }
+        if (saving) return
+        saving = true
         _state.update { it.copy(difficulty = difficulty) } // keep the Results stars in sync
         viewModelScope.launch {
             galleryRepo.saveToGallery(id, folderId, title?.ifBlank { null }, difficulty, tags, keepPhoto)
+            val folder = folders.value.firstOrNull { it.folder.id == folderId }?.folder?.name ?: "your gallery"
+            _state.update { it.copy(savedTo = folder) }
+            notify(UiMessage("Saved to $folder"))
+            saving = false
             onDone()
         }
     }
@@ -246,6 +324,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
      * photo, open the discovery sheet, and recognize automatically once a backend connects.
      */
     fun submitCapture(raw: File, crop: CropSpec? = null, topicHint: String = "unknown") {
+        if (_state.value.busy) return   // one photo at a time
         if (backend.value is BackendState.Connected) {
             captureAndRecognize(raw, crop, topicHint)
             _captureEvents.tryEmit(CaptureEvent.NavigateToReview)
@@ -269,7 +348,18 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
      * Auto); when set, it overrides the recognizer's guess so Review and Solve use it.
      */
     fun captureAndRecognize(raw: File, crop: CropSpec? = null, topicHint: String = "unknown") {
-        _state.update { it.copy(busy = true, status = "Preprocessing…", error = null, parseError = null, result = null, solutionAnswer = "", solutionBusy = false) }
+        lastCapture = PendingCapture(raw, crop, topicHint)
+        // A new capture starts from a clean page: nothing of the previous problem may sit under
+        // the new photo while this one is being read, or if reading it fails.
+        _state.update {
+            it.copy(
+                busy = true, status = "Preprocessing…", error = null, parseError = null, recognizeError = null,
+                result = null, solutionAnswer = "", solutionBusy = false,
+                imageFile = raw, sessionId = "", latex = "", rawLatex = "", userSteps = emptyList(),
+                problems = emptyList(), problemIndex = 0, splitAt = "", splitUncertain = false,
+                suggestions = emptyList(), confidence = 0.0, lowConfidence = false,
+            )
+        }
         val debug = debugImages
         val threshold = useAdaptiveThreshold
         viewModelScope.launch {
@@ -307,14 +397,11 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             } catch (e: Exception) {
-                if (e is IOException) {
-                    // Connectivity problem → re-locate and open the discovery sheet, not a dead-end error.
-                    _state.update { it.copy(busy = false, status = "", error = null) }
-                    searchBackend()
-                    _captureEvents.tryEmit(CaptureEvent.OpenBackendSheet)
-                } else {
-                    _state.update { it.copy(busy = false, status = "", error = describe(e)) }
-                }
+                // Review is already on screen: say what happened there and offer Retry. The photo
+                // is kept in [lastCapture].
+                Timber.w(e, "recognition failed")
+                if (e is IOException) searchBackend()
+                _state.update { it.copy(busy = false, status = "", error = null, recognizeError = recognizeFailureNote(e)) }
             }
         }
     }
@@ -339,6 +426,13 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
             val suggestions = repo.suggestionsFor(p.problemLatex)
             _state.update { if (it.problemIndex == index && it.latex == p.problemLatex) it.copy(suggestions = suggestions) else it }
         }
+    }
+
+    /** Review's Retry: send the kept photo again. */
+    fun retryRecognize() {
+        val last = lastCapture ?: return
+        if (_state.value.busy) return
+        captureAndRecognize(last.raw, last.crop, last.topicHint)
     }
 
     fun addUserStep() = _state.update { it.copy(userSteps = it.userSteps + "") }
@@ -367,6 +461,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     /** "Check my steps": the problem plus the user's (edited) chain go to /verify. No steps → solve. */
     fun verify() {
         val s = _state.value
+        if (s.busy) return   // a second tap while the first request is in flight
         val chain = s.userSteps.map { it.trim().removePrefix("=").trim() }.filter { it.isNotEmpty() }
         if (chain.isEmpty()) { solve(); return }
         _state.update { it.copy(busy = true, status = "Verifying steps…", error = null, parseError = null) }
@@ -438,7 +533,9 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                 repo.saveVerification(s.sessionId, s.latex, s.topic, all, current.verified, current.mismatchAt)
                 _state.update { it.copy(solutionBusy = false, result = current.copy(steps = all), solutionAnswer = solved.answerLatex) }
             } catch (e: Exception) {
-                _state.update { it.copy(solutionBusy = false, error = describe(e)) }
+                Timber.w(e, "full solution failed")
+                _state.update { it.copy(solutionBusy = false) }
+                notify(UiMessage(failureNote(e)))   // Results has no error line of its own
             }
         }
     }
@@ -464,6 +561,7 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     /** Step 5–6: send the confirmed LaTeX; receive steps + verification. */
     fun solve() {
         val s = _state.value
+        if (s.busy) return   // a second tap while the first request is in flight
         _state.update { it.copy(busy = true, status = "Solving…", error = null, parseError = null) }
         viewModelScope.launch {
             try {
@@ -482,17 +580,47 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                 sessionId = session.sessionId, latex = session.confirmedLatex.ifEmpty { session.recognizedLatex },
                 topic = session.topic, imageFile = session.imagePath?.let(::File),
                 difficulty = session.difficulty,
+                savedTo = session.folderId?.let { id -> folders.value.firstOrNull { it.folder.id == id }?.folder?.name },
                 result = SolveResponse(
                     sessionId = session.sessionId, topic = session.topic, steps = repo.stepsOf(session),
                     answerLatex = session.answerLatex, verified = session.verified ?: false, mismatchAt = session.mismatchAt,
-                    // A note saved from a student-chain check keeps its verdict (incl. "almost").
-                    verdict = if (repo.stepsOf(session).any { it.isStudent }) Verdict.of(session.verified, session.mismatchAt) else "",
+                    verdict = when {
+                        // Read but never solved or checked: nothing has been verified, so say so.
+                        session.verified == null && repo.stepsOf(session).isEmpty() -> Verdict.UNSOLVED
+                        // A note saved from a student-chain check keeps its verdict (incl. "almost").
+                        repo.stepsOf(session).any { it.isStudent } -> Verdict.of(session.verified, session.mismatchAt)
+                        else -> ""
+                    },
                 ),
+                error = null, parseError = null, recognizeError = null, userSteps = emptyList(),
+                problems = emptyList(), splitAt = "", splitUncertain = false, suggestions = emptyList(),
                 solutionAnswer = repo.stepsOf(session).lastOrNull { it.isSolution }?.afterLatex ?: "",
                 solutionBusy = false,
             )
         }
     }
+
+    /** Write the current note's PDF off the main thread; Results shares it or shows the error sheet. */
+    fun exportPdf() {
+        val snapshot = _state.value
+        if (snapshot.exporting || snapshot.result == null) return
+        _state.update { it.copy(exporting = true, exportFailed = false, exportedFile = null) }
+        viewModelScope.launch {
+            try {
+                val file = withContext(Dispatchers.IO) { PdfExporter.export(getApplication(), snapshot) }
+                _state.update { it.copy(exporting = false, exportedFile = file) }
+            } catch (e: Exception) {
+                Timber.e(e, "PDF export failed")
+                _state.update { it.copy(exporting = false, exportFailed = true) }
+            }
+        }
+    }
+
+    fun exportShared() = _state.update { it.copy(exportedFile = null) }
+    fun dismissExportError() = _state.update { it.copy(exportFailed = false) }
+
+    /** An unsolved note's "Fix the reading": take it back to Review, editable, with nothing solved. */
+    fun reviewUnsolved() = _state.update { it.copy(result = null, error = null, parseError = null, busy = false, status = "") }
 
     /** Set the current note's difficulty (from the Results stars); persists it on the session. */
     fun setDifficulty(difficulty: Difficulty?) {
@@ -507,20 +635,12 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     /** Solve / Check failed on Review. A 422 is a parse failure: the yellow note, not the raw error body. */
     private fun SolverUiState.failed(e: Exception): SolverUiState =
         if (e is HttpException && e.code() == 422) {
-            Timber.w("parse failure from the backend: %s", e.response()?.errorBody()?.string()?.take(300))
-            copy(busy = false, status = "", error = null, parseError = PARSE_ERROR_NOTE)
+            val body = e.response()?.errorBody()?.string().orEmpty()
+            Timber.w("parse failure from the backend: %s", body.take(300))
+            copy(busy = false, status = "", error = null, parseError = parseNote(body))
         } else {
-            copy(busy = false, status = "", error = describe(e))
+            Timber.w(e, "request failed")
+            copy(busy = false, status = "", error = failureNote(e))
         }
 
-    private fun describe(e: Exception): String = when (e) {
-        is HttpException -> when (e.code()) {
-            413 -> "Image too large — move closer or crop."
-            422 -> "The backend could not parse that expression: ${e.response()?.errorBody()?.string()?.take(120)}"
-            503 -> "Recognition service unavailable — retry, or open a cached session from History."
-            else -> "Server error ${e.code()}"
-        }
-        is IOException -> "Can't reach the backend. Tap the status chip to find or set it."
-        else -> e.message ?: e.toString()
-    }
 }

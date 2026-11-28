@@ -1,5 +1,13 @@
 package com.mathnotes.solver.ui
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -79,11 +87,35 @@ private fun sympyFn(topic: String): String = when (topic) {
  * Stateless so both states can be previewed and screenshotted; [ResultsScreen] binds it to the VM.
  */
 @Composable
-fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery: () -> Unit) {
+fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery: () -> Unit, onFixReading: () -> Unit = {}) {
     val state by vm.state.collectAsState()
     val result = state.result ?: return
     val ctx = LocalContext.current
     val date = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d")) }
+
+    // A finished PDF goes to the share sheet; a failed one opens the error sheet.
+    LaunchedEffect(state.exportedFile) {
+        state.exportedFile?.let { file ->
+            vm.exportShared()
+            runCatching { PdfExporter.share(ctx, file) }.onFailure { vm.notify(UiMessage("I couldn't open the share sheet")) }
+        }
+    }
+    if (state.exportFailed) ExportErrorSheet(onRetry = vm::exportPdf, onDismiss = vm::dismissExportError)
+
+    if (result.verdict == Verdict.UNSOLVED) {
+        UnsolvedContent(
+            problemLatex = state.latex,
+            topic = result.topic,
+            dateLabel = date,
+            busy = state.busy,
+            // Never the server's text: a plain sentence for a reading that will not parse, or the mapped error.
+            problem = state.parseError ?: state.error,
+            onSolve = vm::solve,
+            onFixReading = { vm.reviewUnsolved(); onFixReading() },
+            onNewProblem = { vm.reset(); onNewProblem() },
+        )
+        return
+    }
 
     ResultsContent(
         problemLatex = state.latex,
@@ -100,10 +132,84 @@ fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery
         onShowSolution = vm::showFullSolution,
         difficulty = state.difficulty,
         onRate = vm::setDifficulty,
-        onExport = { PdfExporter.exportAndShare(ctx, state) },
+        onExport = vm::exportPdf,
+        exporting = state.exporting,
         onNewProblem = { vm.reset(); onNewProblem() },
         onSaveToGallery = onSaveToGallery,
+        savedTo = state.savedTo,
     )
+}
+
+/**
+ * A capture that was read but never solved or checked. Nothing has been verified, so there is no
+ * stamp, no answer box and no "agrees at every step": only the problem and a way to solve it.
+ */
+@Composable
+fun UnsolvedContent(
+    problemLatex: String,
+    topic: String,
+    dateLabel: String,
+    busy: Boolean,
+    problem: String?,
+    onSolve: () -> Unit,
+    onFixReading: () -> Unit,
+    onNewProblem: () -> Unit,
+) {
+    val density = LocalDensity.current
+    NotepadPage(
+        title = "ProofPad",
+        caption = "$dateLabel · $topic",
+        bottomBar = {
+            OutlinedButton(
+                onClick = onFixReading,
+                enabled = !busy,
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.5.dp, NotepadColors.Ink),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+            ) { Text("Fix the reading", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
+            Button(
+                onClick = onSolve,
+                enabled = !busy && problemLatex.isNotBlank(),
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),
+            ) { Text(if (busy) "Solving…" else "Solve it", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
+        },
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NotepadLabel("Problem", fontSize = 17)
+            NotepadLabel("not solved yet", fontSize = 17)
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            LatexView(displayProblem(problemLatex), textSizePx = with(density) { 26.sp.toPx() }, fillWidth = false)
+        }
+        Spacer(Modifier.height(16.dp))
+        StickyNote(Modifier.fillMaxWidth(0.94f), rotationDeg = -1f) {
+            Text(
+                "Not solved yet. I read this problem but it was never solved or checked.",
+                fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.NoteInkYellow,
+            )
+        }
+        if (problem != null) {
+            Spacer(Modifier.height(12.dp))
+            StickyNote(Modifier.fillMaxWidth(0.94f), background = NotepadColors.StickyPink, rotationDeg = 1f) {
+                Text(problem, fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.NoteInkPink)
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        OutlinedButton(
+            onClick = onNewProblem,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, NotepadColors.ChipBorder),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+        ) { Text("New problem", fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Ink) }
+    }
 }
 
 @Composable
@@ -125,6 +231,8 @@ fun ResultsContent(
     onExport: () -> Unit,
     onNewProblem: () -> Unit,
     onSaveToGallery: (() -> Unit)? = null,
+    savedTo: String? = null,
+    exporting: Boolean = false,
 ) {
     // A student-chain check: the rows are the student's own lines, each with its own status;
     // our solution (if asked for) is listed separately below, muted.
@@ -147,7 +255,7 @@ fun ResultsContent(
             OutlinedButton(
                 onClick = onExport,
                 // A flagged generated solution is held back; a student's own checked work can always be exported.
-                enabled = !isFlagged || isStudentChain,
+                enabled = (!isFlagged || isStudentChain) && !exporting,
                 modifier = Modifier.weight(1f).height(48.dp),
                 shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.5.dp, if (isFlagged && !isStudentChain) NotepadColors.Held else NotepadColors.Ink),
@@ -155,7 +263,13 @@ fun ResultsContent(
                     contentColor = NotepadColors.Ink,
                     disabledContentColor = NotepadColors.Held,
                 ),
-            ) { Text("Export PDF", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
+            ) {
+                if (exporting) {
+                    CircularProgressIndicator(Modifier.size(16.dp), color = NotepadColors.Ink, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(if (exporting) "Making PDF…" else "Export PDF", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp)
+            }
 
             Button(
                 onClick = onNewProblem,
@@ -221,7 +335,7 @@ fun ResultsContent(
             val bad = steps.getOrNull(flaggedIndex)
             val fallback = if (bad?.status == "unparseable") "I could not read step $n." else
                 "Step $n doesn't follow from ${if (n == 1) "the problem" else "step ${n - 1}"}."
-            VerifierNote(message = bad?.note?.ifBlank { fallback } ?: fallback, resolveFromStep = null)
+            VerifierNote(message = bad?.note?.ifBlank { fallback } ?: fallback)
         } else if (isIncomplete) {
             StickyNote(rotationDeg = 1.5f) {
                 Text("almost there", fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp, color = NotepadColors.Muted)
@@ -234,10 +348,7 @@ fun ResultsContent(
             }
         } else if (isFlagged) {
             val n = flaggedIndex!! + 1
-            VerifierNote(
-                message = details.joinToString(" ").ifBlank { "Step $n doesn't match step ${n - 1}." },
-                resolveFromStep = n - 1,
-            )
+            VerifierNote(message = details.joinToString(" ").ifBlank { "Step $n doesn't match step ${n - 1}." })
         } else if (selected != null && selected!! < steps.size) {
             val s = steps[selected!!]
             StickyNote(rotationDeg = 1.5f) {
@@ -361,45 +472,24 @@ fun ResultsContent(
                 border = BorderStroke(1.5.dp, NotepadColors.Ink),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
             ) {
-                Text("＋ Save to gallery", fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Ink)
+                Text(
+                    if (savedTo != null) "Saved to $savedTo ✓  ·  change" else "＋ Save to gallery",
+                    fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Ink,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun VerifierNote(message: String, resolveFromStep: Int?) {
+private fun VerifierNote(message: String) {
     StickyNote(background = NotepadColors.StickyPink, rotationDeg = -1.5f) {
         Text("verifier says", fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp, color = NotepadColors.NoteInkPink)
         NoteText(message, fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.NoteInkPink)
-        // The two chips are visual only; a student-chain note (resolveFromStep == null) leaves them out.
-        if (resolveFromStep != null) {
-            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                NoteAction("Edit step", filled = false)
-                NoteAction("Re-solve from step $resolveFromStep", filled = true)
-            }
-        }
     }
 }
 
-/** Small action chip inside the pink verifier note (visual only in this restyle). */
-@Composable
-private fun NoteAction(label: String, filled: Boolean) {
-    val shape = RoundedCornerShape(8.dp)
-    val base = if (filled) {
-        Modifier.clip(shape).background(NotepadColors.NoteInkPink)
-    } else {
-        Modifier.clip(shape).border(1.5.dp, NotepadColors.NoteInkPink, shape)
-    }
-    Box(base.padding(horizontal = 12.dp, vertical = 4.dp)) {
-        Text(
-            label,
-            fontFamily = NotepadFonts.PatrickHand,
-            fontSize = 15.sp,
-            color = if (filled) NotepadColors.StickyPink else NotepadColors.NoteInkPink,
-        )
-    }
-}
 
 /**
  * Difficulty stars — one widget, one data field. Backs the gallery [Difficulty]
@@ -434,6 +524,41 @@ private fun DifficultyRatingRow(difficulty: Difficulty?, onRate: (Difficulty) ->
             if (difficulty != null) {
                 Spacer(Modifier.width(8.dp))
                 Text("$label ($stars / 3)", fontFamily = NotepadFonts.PatrickHand, fontSize = 16.sp, color = NotepadColors.Muted)
+            }
+        }
+    }
+}
+
+
+/** Notepad-style sheet for a PDF that could not be written, with Retry. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExportErrorSheet(onRetry: () -> Unit, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = NotepadColors.Paper) {
+        Column(
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("I couldn't make the PDF", fontFamily = NotepadFonts.PatrickHand, fontSize = 26.sp, color = NotepadColors.Ink)
+            StickyNote(Modifier.fillMaxWidth(), background = NotepadColors.StickyPink, rotationDeg = -1f) {
+                Text(
+                    "Something went wrong while writing the file. Your note is safe. If the phone is low on space, free some up, then try again.",
+                    fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.NoteInkPink,
+                )
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+                ) { Text("Close", fontFamily = NotepadFonts.Inter, fontSize = 15.sp) }
+                Button(
+                    onClick = { onDismiss(); onRetry() },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),
+                ) { Text("Retry", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
             }
         }
     }

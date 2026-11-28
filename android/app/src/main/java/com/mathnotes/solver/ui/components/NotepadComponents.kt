@@ -1,5 +1,26 @@
 package com.mathnotes.solver.ui.components
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.delay
+import com.mathnotes.solver.ui.UiMessage
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -143,5 +164,85 @@ fun NotepadPage(
             content = content,
         )
         NotepadBottomBar(content = bottomBar)
+    }
+}
+
+
+/**
+ * Shows [UiMessage]s one at a time at the bottom of the screen, above the bottom bar: ink on
+ * paper, with the action (Undo) on the right. Each stays for [UiMessage.MILLIS].
+ */
+@Composable
+fun NoticeHost(messages: Flow<UiMessage>, modifier: Modifier = Modifier) {
+    var current by remember { mutableStateOf<UiMessage?>(null) }
+    LaunchedEffect(messages) {
+        messages.collect { next ->
+            current?.onDismissed?.invoke()     // a newer notice replaces the one on screen
+            current = next
+        }
+    }
+    val shown = current ?: return
+    LaunchedEffect(shown) {
+        delay(UiMessage.MILLIS)
+        if (current === shown) {
+            current = null
+            shown.onDismissed?.invoke()
+        }
+    }
+    Row(
+        modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, bottom = 96.dp)
+            .shadow(6.dp, RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(10.dp))
+            .background(NotepadColors.Ink)
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .padding(start = 16.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            shown.text,
+            Modifier.weight(1f).padding(vertical = 14.dp),
+            fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.Paper,
+        )
+        if (shown.actionLabel != null) {
+            TextButton(
+                onClick = {
+                    current = null
+                    shown.onAction?.invoke()
+                },
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) {
+                Text(shown.actionLabel, fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = NotepadColors.StickyYellow)
+            }
+        }
+    }
+}
+
+/** Wraps a note row or card: tap opens it, press-and-hold offers "Delete note". */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun NotePressMenu(
+    onClick: () -> Unit,
+    onDelete: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box(
+        modifier.combinedClickable(
+            onClick = onClick,
+            onLongClick = if (onDelete != null) ({ open = true }) else null,
+            onLongClickLabel = "Note options",
+        ),
+    ) {
+        content()
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text("Delete note", fontFamily = NotepadFonts.Inter) },
+                onClick = { open = false; onDelete?.invoke() },
+            )
+        }
     }
 }

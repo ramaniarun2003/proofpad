@@ -1,5 +1,10 @@
 package com.mathnotes.solver
 
+import com.mathnotes.solver.ui.UiMessage
+import com.mathnotes.solver.ui.components.NoticeHost
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Box
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -47,6 +52,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             NotepadTheme {
                 Surface {
+                  Box {
                     val nav = rememberNavController()
                     NavHost(navController = nav, startDestination = start) {
                         composable("welcome") {
@@ -85,7 +91,12 @@ class MainActivity : ComponentActivity() {
                         composable("setupRetake") {
                             // Single-line retake (formula mode) for a line the page read missed.
                             LaunchedEffect(Unit) {
-                                setupVm.events.collect { if (it is SetupEvent.Recognized) nav.popBackStack("setupCheck", inclusive = false) }
+                                setupVm.events.collect {
+                                    when (it) {
+                                        is SetupEvent.Recognized -> nav.popBackStack("setupCheck", inclusive = false)
+                                        is SetupEvent.Error -> vm.notify(UiMessage(it.message))
+                                    }
+                                }
                             }
                             CaptureScreen(
                                 vm,
@@ -117,7 +128,8 @@ class MainActivity : ComponentActivity() {
                             FolderDetailScreen(vm,
                                 onBack = { nav.popBackStack() },
                                 onOpenNote = { nav.navigate("results") },
-                                onAddNote = { nav.popBackStack("capture", inclusive = false) })
+                                onAddNote = { nav.popBackStack("capture", inclusive = false) },
+                                onSettings = { nav.navigate("settings") })
                         }
                         composable("galleryCrop") {
                             GalleryCropScreen(
@@ -133,7 +145,9 @@ class MainActivity : ComponentActivity() {
                         composable("results") {
                             ResultsScreen(vm,
                                 onNewProblem = { vm.reset(); nav.popBackStack("capture", inclusive = false) },
-                                onSaveToGallery = { nav.navigate("saveToGallery") })
+                                onSaveToGallery = { nav.navigate("saveToGallery") },
+                                // An unsolved note goes back to Review in place of this screen.
+                                onFixReading = { nav.navigate("review") { popUpTo("results") { inclusive = true } } })
                         }
                         composable("saveToGallery") {
                             SaveToGalleryScreen(vm, onDone = { nav.popBackStack("results", inclusive = false) })
@@ -155,6 +169,9 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+                    // Save / delete confirmations and Undo, over whichever screen is showing.
+                    NoticeHost(vm.messages, Modifier.align(Alignment.BottomCenter))
+                  }
                 }
             }
         }

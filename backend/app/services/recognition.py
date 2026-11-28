@@ -48,6 +48,17 @@ class RecognitionError(RuntimeError):
     pass
 
 
+class NothingToRead(RecognitionError):
+    """The recognizer answered, and found no writing in the photo (Mathpix: "Content not found")."""
+
+
+def _raise_for(error) -> None:
+    text = str(error)
+    if "content not found" in text.lower():
+        raise NothingToRead(text)
+    raise RecognitionError(text)
+
+
 async def recognize(image_bytes: bytes, content_type: str = "image/jpeg") -> RecognitionResult:
     if settings.STUB_RECOGNITION:
         return RecognitionResult(latex=settings.STUB_LATEX, confidence=0.99, raw={"stub": True})
@@ -70,7 +81,7 @@ async def recognize(image_bytes: bytes, content_type: str = "image/jpeg") -> Rec
         raise RecognitionError(f"Mathpix returned {r.status_code}: {r.text[:200]}")
     data = r.json()
     if "error" in data:
-        raise RecognitionError(str(data["error"]))
+        _raise_for(data["error"])
     # Keep the raw response and the upload for every capture, like page mode does.
     ts = time.strftime("%Y%m%d_%H%M%S") + f"_{int(time.time() * 1000) % 1000:03d}"
     _save_page_debug(ts, "formula_mathpix", data, "line_data", image_bytes, upload_name="formula_upload")
@@ -85,8 +96,11 @@ def _image_size(image_bytes: bytes) -> tuple[int, int]:
 
     from PIL import Image
 
-    with Image.open(io.BytesIO(image_bytes)) as im:
-        return im.width, im.height
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as im:
+            return im.width, im.height
+    except Exception as exc:   # not an image at all: nothing to read, and not a server error
+        raise NothingToRead(f"upload is not a readable image: {exc}") from exc
 
 
 def _bbox_of(cnt: list) -> list[int]:
@@ -308,7 +322,7 @@ async def _mathpix_page(image_bytes: bytes, content_type: str, **extra) -> dict:
         raise RecognitionError(f"Mathpix returned {r.status_code}: {r.text[:200]}")
     data = r.json()
     if "error" in data:
-        raise RecognitionError(str(data["error"]))
+        _raise_for(data["error"])
     return data
 
 

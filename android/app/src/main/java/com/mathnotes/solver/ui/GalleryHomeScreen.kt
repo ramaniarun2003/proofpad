@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import com.mathnotes.solver.ui.components.NotePressMenu
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -86,6 +87,7 @@ fun GalleryHomeScreen(
         onCreateFolder = vm::createFolder,
         onOpenFolder = onOpenFolder,
         onOpenNote = { vm.openNote(it); onOpenNote() },
+        onDeleteNote = vm::deleteNote,
         onSettings = onSettings,
         onSnap = onSnap,
     )
@@ -105,6 +107,7 @@ fun GalleryHomeContent(
     onOpenNote: (SessionEntity) -> Unit,
     onSettings: () -> Unit,
     onSnap: () -> Unit,
+    onDeleteNote: ((SessionEntity) -> Unit)? = null,
     nowOverride: Long? = null,
 ) {
     var showNewFolder by remember { mutableStateOf(false) }
@@ -126,7 +129,7 @@ fun GalleryHomeContent(
                 if (searchResults.isEmpty()) {
                     Text("No notes match “$query”.", fontFamily = NotepadFonts.PatrickHand, fontSize = 16.sp, color = NotepadColors.Muted)
                 } else {
-                    searchResults.forEach { NoteRow(it, folderNames[it.folderId], now, onOpenNote) }
+                    searchResults.forEach { NoteRow(it, folderNames[it.folderId], now, onOpenNote, onDeleteNote) }
                 }
             } else {
                 // My classes.
@@ -155,7 +158,7 @@ fun GalleryHomeContent(
                     Spacer(Modifier.height(18.dp))
                     SectionHeader("This past week", trailing = "${savedThisWeek.size} note" + if (savedThisWeek.size == 1) "" else "s")
                     Spacer(Modifier.height(4.dp))
-                    savedThisWeek.forEach { NoteRow(it, folderNames[it.folderId], now, onOpenNote) }
+                    savedThisWeek.forEach { NoteRow(it, folderNames[it.folderId], now, onOpenNote, onDeleteNote) }
                 }
             }
         }
@@ -269,10 +272,14 @@ private fun NoteThumbCard(note: SessionEntity, folderName: String?, now: Long, o
 }
 
 @Composable
-private fun NoteRow(note: SessionEntity, folderName: String?, now: Long, onClick: (SessionEntity) -> Unit) {
+private fun NoteRow(
+    note: SessionEntity, folderName: String?, now: Long, onClick: (SessionEntity) -> Unit,
+    onDelete: ((SessionEntity) -> Unit)? = null,
+) {
     val density = LocalDensity.current
+    NotePressMenu(onClick = { onClick(note) }, onDelete = onDelete?.let { { it(note) } }) {
     Row(
-        Modifier.fillMaxWidth().height(54.dp).clickable { onClick(note) },
+        Modifier.fillMaxWidth().height(54.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.width(48.dp), contentAlignment = Alignment.Center) { StatusGlyph(note, 20.dp) }
@@ -282,6 +289,7 @@ private fun NoteRow(note: SessionEntity, folderName: String?, now: Long, onClick
             Modifier.padding(start = 8.dp, end = 4.dp),
             fontFamily = NotepadFonts.PatrickHand, fontSize = 14.sp, color = NotepadColors.Muted,
         )
+    }
     }
 }
 

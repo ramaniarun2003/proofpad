@@ -24,8 +24,8 @@ object PdfExporter {
     private const val PAGE_H = 792
     private const val MARGIN = 40
 
-    fun exportAndShare(context: Context, state: SolverUiState) {
-        val file = export(context, state)
+    /** Hand a finished PDF to the system share sheet. Call on the main thread. */
+    fun share(context: Context, file: File) {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "application/pdf"
@@ -35,8 +35,20 @@ object PdfExporter {
         context.startActivity(Intent.createChooser(intent, "Share solution PDF"))
     }
 
+    /**
+     * Build the PDF and return the file. Does disk and rendering work: call it off the main
+     * thread. Throws when the page cannot be written (no space, for example).
+     */
     fun export(context: Context, state: SolverUiState): File {
         val doc = PdfDocument()
+        try {
+            return write(context, state, doc)
+        } finally {
+            doc.close()
+        }
+    }
+
+    private fun write(context: Context, state: SolverUiState, doc: PdfDocument): File {
         val title = Paint().apply { color = Color.BLACK; textSize = 16f; isFakeBoldText = true }
         val body = Paint().apply { color = Color.DKGRAY; textSize = 11f }
         var pageNo = 1
@@ -90,8 +102,8 @@ object PdfExporter {
         text("Session ${state.sessionId} · topic: ${state.topic}", body)
         y += 8
 
-        state.imageFile?.takeIf { it.exists() }?.let { f ->
-            val bmp = BitmapFactory.decodeFile(f.absolutePath)
+        // The photo is optional: one that has gone missing or cannot be decoded is left out.
+        state.imageFile?.takeIf { it.exists() }?.let { f -> BitmapFactory.decodeFile(f.absolutePath) }?.let { bmp ->
             val scale = minOf((PAGE_W - 2 * MARGIN).toFloat() / bmp.width, 220f / bmp.height)
             val w = (bmp.width * scale).toInt(); val h = (bmp.height * scale).toInt()
             newPageIfNeeded(h + 10f)
@@ -144,7 +156,6 @@ object PdfExporter {
         val dir = File(context.cacheDir, "exports").apply { mkdirs() }
         val out = File(dir, "solution_${state.sessionId.take(8)}.pdf")
         out.outputStream().use { doc.writeTo(it) }
-        doc.close()
         return out
     }
 }

@@ -31,9 +31,16 @@ class Settings:
     # X-ProofPad-Key. Empty = unauthenticated (local dev); set in prod so the URL can't burn credit.
     PROOFPAD_API_KEY: str = os.getenv("PROOFPAD_API_KEY", "")
 
-    # Shared secret for the public deployment: every request except /health must send it as
-    # X-ProofPad-Key. Empty = unauthenticated (local dev); set in prod so the URL can't burn credit.
-    PROOFPAD_API_KEY: str = os.getenv("PROOFPAD_API_KEY", "")
+    # Hard limits (services/sandbox.py). Solve, verify and parsing run in worker processes that are
+    # killed at the deadline; over-long or over-nested LaTeX is refused before it is parsed.
+    SOLVE_TIMEOUT_S: float = float(os.getenv("SOLVE_TIMEOUT_S", "10"))
+    VERIFY_TIMEOUT_S: float = float(os.getenv("VERIFY_TIMEOUT_S", "10"))
+    RECOGNIZE_TIMEOUT_S: float = float(os.getenv("RECOGNIZE_TIMEOUT_S", "20"))
+    PARSE_TIMEOUT_S: float = float(os.getenv("PARSE_TIMEOUT_S", "5"))
+    MAX_LATEX_CHARS: int = int(os.getenv("MAX_LATEX_CHARS", "2000"))
+    MAX_LATEX_DEPTH: int = int(os.getenv("MAX_LATEX_DEPTH", "24"))
+    MAX_STEPS: int = int(os.getenv("MAX_STEPS", "40"))
+    SANDBOX_WORKERS: int = int(os.getenv("SANDBOX_WORKERS", "2"))
 
     # Connection details shown at startup and returned by /discover.
     APP_VERSION: str = "0.1.0"

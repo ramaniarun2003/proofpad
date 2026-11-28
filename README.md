@@ -20,7 +20,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env            # leave MATHPIX_* empty → stub mode, no network needed
 pytest                          # 31 tests: solver rules, verifier, API round trip
-./run.sh                        # http://0.0.0.0:8000  — interactive docs at /docs
+./run.sh                        # port 8000, two server processes; DEV=1 ./run.sh for --reload
 ```
 
 Try it without the app:
@@ -110,3 +110,12 @@ Room, so **History** on the phone shows solved problems even if the network drop
 - **M2 Nov 16 (Phase 2 presentation)** — derivatives + integrals end to end, verified, demoed live
 - **M3 Dec 2** — series, per-step mismatch reporting, PDF export, history; feature freeze
 - **Dec 4** slides · **Dec 7** final demo · **Dec 14** final report
+
+## Known issues
+- **No live page detection on the capture screen.** The status line under the guide box says
+  "hold still"; it does not look at the preview frames. Page detection only runs on the photo after
+  the shutter (the opt-in perspective warp in `Preprocessor`). Wiring it to the preview needs a
+  CameraX `ImageAnalysis` use case, per-frame quad detection, and thresholds for "too dark" and
+  "too tilted" tuned on real pages.
+- **Debug APK size.** The debug APK carries OpenCV for four ABIs (about 200 MB). A release or
+  per-ABI build is much smaller; nothing in the code depends on the extra ABIs.

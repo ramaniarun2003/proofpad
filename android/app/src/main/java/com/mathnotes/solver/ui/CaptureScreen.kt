@@ -1,5 +1,26 @@
 package com.mathnotes.solver.ui
 
+import timber.log.Timber
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.core.app.ActivityCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import com.mathnotes.solver.ui.components.NotepadBottomBar
+import com.mathnotes.solver.ui.components.NotepadHeader
+import com.mathnotes.solver.ui.components.StickyNote
+import com.mathnotes.solver.ui.components.ruledPaper
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -166,8 +187,25 @@ fun CaptureScreen(
     var hasPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { hasPermission = it }
+    // Denied twice (or "don't ask again"): the system will not show its prompt any more, so the
+    // only way forward is the app's page in system settings.
+    var permanentlyDenied by remember { mutableStateOf(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        hasPermission = granted
+        permanentlyDenied = !granted && cameraPermanentlyDenied(ctx)
+    }
     LaunchedEffect(Unit) { if (!hasPermission) permissionLauncher.launch(Manifest.permission.CAMERA) }
+    // Coming back from system settings (or any other app): look again.
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasPermission = ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                if (hasPermission) permanentlyDenied = false
+            }
+        }
+        lifecycle.lifecycle.addObserver(observer)
+        onDispose { lifecycle.lifecycle.removeObserver(observer) }
+    }
 
     val imageCapture = remember { ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY).build() }
 
@@ -189,13 +227,19 @@ fun CaptureScreen(
         onGalleryPicked()
     }
 
+    // True from the shutter tap until CameraX has written the photo: `busy` only starts after that.
+    var capturing by remember { mutableStateOf(false) }
+
     fun capture() {
+        if (capturing) return
+        capturing = true
         val f = File(ctx.cacheDir, "capture_${System.currentTimeMillis()}.jpg")
         imageCapture.takePicture(
             ImageCapture.OutputFileOptions.Builder(f).build(),
             ContextCompat.getMainExecutor(ctx),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                    capturing = false
                     val crop = CropSpec.GuideBox(
                         viewWidth = previewSize.width.toFloat(),
                         viewHeight = previewSize.height.toFloat(),
@@ -215,9 +259,31 @@ fun CaptureScreen(
                         vm.submitCapture(f, crop, topicHint)
                     }
                 }
-                override fun onError(exception: ImageCaptureException) { /* surface via snackbar */ }
+                override fun onError(exception: ImageCaptureException) {
+                    capturing = false
+                    Timber.w(exception, "photo capture failed")
+                    vm.notify(UiMessage("I couldn't take that photo. Try again."))
+                }
             },
         )
+    }
+
+    if (!hasPermission) {
+        // No camera, so no viewfinder, guide box or status line: a page that says what to do.
+        CameraPermissionPage(
+            pageMode = pageMode || onFormulaCaptured != null,
+            permanentlyDenied = permanentlyDenied,
+            onAllow = { permissionLauncher.launch(Manifest.permission.CAMERA) },
+            onOpenSettings = {
+                ctx.startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            },
+            onPickPhoto = { galleryLauncher.launch("image/*") },
+            onGallery = onGallery, onHistory = onHistory, onSettings = onSettings,
+        )
+        return
     }
 
     val vignette = Brush.radialGradient(
@@ -230,7 +296,7 @@ fun CaptureScreen(
         val h = maxHeight
 
         // Camera preview fills the frame (vignette shows through until it binds).
-        if (hasPermission) {
+        run {
             AndroidView(
                 modifier = Modifier.fillMaxSize().onSizeChanged { previewSize = it },
                 factory = { context ->
@@ -245,14 +311,6 @@ fun CaptureScreen(
                         }, ContextCompat.getMainExecutor(context))
                     }
                 },
-            )
-        } else {
-            Text(
-                "Camera permission needed",
-                Modifier.align(Alignment.Center),
-                color = NotepadColors.Paper,
-                fontFamily = NotepadFonts.PatrickHand,
-                fontSize = 18.sp,
             )
         }
 
@@ -321,7 +379,9 @@ fun CaptureScreen(
         // Status line just below the guide box.
         Text(
             if (busy) (if (pageMode) setupState?.status else state.status)?.ifBlank { "Recognizing…" } ?: "Recognizing…"
-            else "page found · hold still",
+            // Nothing looks at the preview frames yet, so this must not claim a page was found.
+            // Live page detection is a known gap (README, Known issues).
+            else "hold still",
             Modifier
                 .fillMaxWidth()
                 .offset(y = h * (gTop + gHeight) + 10.dp)
@@ -368,7 +428,7 @@ fun CaptureScreen(
             ) { Canvas(Modifier.size(28.dp)) { drawGalleryGlyph(NotepadColors.Ink) } }
 
             // Shutter.
-            val shutterEnabled = hasPermission && !busy
+            val shutterEnabled = hasPermission && !busy && !capturing
             Box(
                 Modifier
                     .size(82.dp)
@@ -539,4 +599,83 @@ private fun DrawScope.drawGear(color: Color) {
     }
     drawCircle(color, radius = rInner, style = Stroke(width = 2.dp.toPx()))
     drawCircle(color, radius = s * 0.12f, style = Stroke(width = 2.dp.toPx()))
+}
+
+
+/** True once the system will no longer show the camera prompt (denied twice, or "don't ask again"). */
+private fun cameraPermanentlyDenied(context: Context): Boolean {
+    var c: Context? = context
+    while (c is ContextWrapper && c !is Activity) c = c.baseContext
+    val activity = c as? Activity ?: return false
+    return !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.CAMERA)
+}
+
+/**
+ * Shown in place of the viewfinder when the camera permission is missing: why it is needed, a
+ * button to ask again, and once the system has stopped asking, a link to the app's settings page.
+ * Outside the setup wizard a photo can still be picked, and the other screens stay reachable.
+ */
+@Composable
+private fun CameraPermissionPage(
+    pageMode: Boolean,
+    permanentlyDenied: Boolean,
+    onAllow: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onPickPhoto: () -> Unit,
+    onGallery: () -> Unit,
+    onHistory: () -> Unit,
+    onSettings: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        NotepadHeader(title = "ProofPad", trailing = "camera")
+        Column(
+            Modifier.weight(1f).fillMaxWidth().ruledPaper()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 56.dp, end = 20.dp, top = 20.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text("I need the camera to read your work", fontFamily = NotepadFonts.PatrickHand, fontSize = 26.sp, color = NotepadColors.Ink)
+            StickyNote(Modifier.fillMaxWidth(0.94f), rotationDeg = -1f) {
+                Text(
+                    if (permanentlyDenied) {
+                        "Camera access is turned off for ProofPad. Open settings, tap Permissions, then Camera, and choose Allow."
+                    } else {
+                        "ProofPad takes a photo of the problem you wrote so it can check your steps. Photos are only taken when you press the shutter."
+                    },
+                    fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.NoteInkYellow,
+                )
+            }
+            Button(
+                onClick = if (permanentlyDenied) onOpenSettings else onAllow,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),
+            ) {
+                Text(if (permanentlyDenied) "Open settings" else "Allow camera", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            }
+            if (!pageMode) {
+                OutlinedButton(
+                    onClick = onPickPhoto,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.5.dp, NotepadColors.Ink),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+                ) { Text("Pick a photo instead", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
+            }
+        }
+        if (!pageMode) {
+            NotepadBottomBar {
+                listOf("Gallery" to onGallery, "My notebook" to onHistory, "Settings" to onSettings).forEach { (label, go) ->
+                    OutlinedButton(
+                        onClick = go,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, NotepadColors.ChipBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
+                    ) { Text(label, fontFamily = NotepadFonts.Inter, fontSize = 14.sp, maxLines = 1) }
+                }
+            }
+        }
+    }
 }

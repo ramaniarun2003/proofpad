@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import SessionRow, get_db
-from ..models import PageLine, PageRecognizeResponse, ProblemSplit, RecognizeResponse, Segment
-from ..services import identify, recognition
-from ..services.symbolic import ParseError, parse
+from ..models import PageLine, PageRecognizeResponse, ProblemSplit, RecognizeResponse, Segment, Topic
+from ..services import identify, recognition, sandbox
 
 router = APIRouter(tags=["recognize"])
+log = logging.getLogger("proofpad.api")
+NOTHING_TO_READ = "no writing found in the photo"
 
 
 @router.post("/recognize")
@@ -36,8 +40,11 @@ async def recognize(
     if mode == "page":
         try:
             page = await recognition.recognize_page(data, content_type)
+        except recognition.NothingToRead:
+            raise HTTPException(422, NOTHING_TO_READ)
         except recognition.RecognitionError as exc:
-            raise HTTPException(503, f"recognition unavailable: {exc}")
+            log.warning("page recognition failed: %s", exc)
+            raise HTTPException(503, "recognition unavailable")
         row = SessionRow(id=session_id, device_id=device_id, image_path=str(path),
                          recognized_latex=page.raw_text, confidence=0.0)
         row.log("recognize", mode="page", lines=len(page.lines), stub=settings.STUB_RECOGNITION)
@@ -53,9 +60,14 @@ async def recognize(
         )
 
     try:
-        result = await recognition.recognize(data, content_type)
+        result = await asyncio.wait_for(recognition.recognize(data, content_type), settings.RECOGNIZE_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        raise HTTPException(503, "recognition unavailable: timed out")
+    except recognition.NothingToRead:
+        raise HTTPException(422, NOTHING_TO_READ)   # a blank or unreadable photo: the student retakes it
     except recognition.RecognitionError as exc:
-        raise HTTPException(503, f"recognition unavailable: {exc}")
+        log.warning("recognition failed: %s", exc)   # may quote the recognizer's reply: log only
+        raise HTTPException(503, "recognition unavailable")
 
     # Identify: prefer Mathpix's per-line reading (with bboxes); fall back to the full string.
     split = identify.identify([(ln.latex, ln.bbox) for ln in result.lines] if result.lines else result.latex)
@@ -63,7 +75,7 @@ async def recognize(
     row = SessionRow(id=session_id, device_id=device_id, image_path=str(path),
                      recognized_latex=result.latex, confidence=result.confidence)
     found = split.problems or [split]
-    problems = [_problem(p) for p in found]
+    problems = await run_in_threadpool(_problems, found)
     chosen = problems[split.primary]
     row.log("recognize", confidence=result.confidence, stub=settings.STUB_RECOGNITION,
             steps=len(chosen.steps), split_uncertain=chosen.split_uncertain, split_at=chosen.split_at,
@@ -83,15 +95,24 @@ async def recognize(
     )
 
 
-def _problem(split: identify.Identified) -> ProblemSplit:
-    """One problem with its topic. A reading the parser rejects keeps its LaTeX and loses its steps."""
-    out = ProblemSplit(problem_latex=split.problem_latex, steps=split.steps, split_at=split.split_at,
-                       split_uncertain=split.split_uncertain, bbox=split.bbox)
+def _problems(found: list[identify.Identified]) -> list[ProblemSplit]:
+    """
+    Each problem with its topic. Parsing runs in the sandbox under a deadline; a reading the
+    parser rejects (or cannot finish) keeps its LaTeX and loses its steps, and is still a 200.
+    """
+    out = [ProblemSplit(problem_latex=p.problem_latex, steps=p.steps, split_at=p.split_at,
+                        split_uncertain=p.split_uncertain, bbox=p.bbox) for p in found]
     try:
-        out.topic_guess = parse(split.problem_latex).topic
-    except ParseError as exc:
-        out.parse_error = str(exc)
-        out.steps, out.split_at = [], ""
+        sandbox.check_input(*(p.problem_latex for p in out))
+        parsed = sandbox.run("topics", [p.problem_latex for p in out], timeout=settings.PARSE_TIMEOUT_S)
+    except (sandbox.TooComplex, sandbox.WorkerError) as exc:
+        log.warning("recognize: could not parse the reading in time: %s", exc)
+        parsed = [{"topic": "unknown", "parse_error": sandbox.TOO_COMPLEX}] * len(out)
+    for problem, info in zip(out, parsed):
+        problem.topic_guess = Topic(info["topic"])
+        if info["parse_error"]:
+            problem.parse_error = info["parse_error"]
+            problem.steps, problem.split_at = [], ""
     return out
 
 

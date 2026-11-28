@@ -11,7 +11,7 @@ from .config import settings
 from .db import init_db
 from .models import HealthResponse
 from .routers import export, recognize, solve
-from .services import discovery, recognition
+from .services import discovery, recognition, sandbox
 
 
 # uvicorn only configures its own loggers; give ours a handler so INFO lines reach the console.
@@ -27,8 +27,10 @@ if not _log.handlers:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    sandbox.start()   # warm the solver workers so the first request does not pay for importing SymPy
     discovery.print_connection_block(settings.PORT, settings.APP_VERSION)
     yield
+    sandbox.stop()
 
 
 app = FastAPI(
