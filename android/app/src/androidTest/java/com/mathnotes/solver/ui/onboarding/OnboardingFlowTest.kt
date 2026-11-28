@@ -7,12 +7,14 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import com.mathnotes.solver.MainActivity
 import com.mathnotes.solver.data.WelcomePrefs
+import com.mathnotes.solver.ui.setup.SetupViewModel
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -44,11 +46,11 @@ class OnboardingFlowTest {
         launchWithOnboarding(complete = false).use {
             compose.onNodeWithText("Get started").performClick()
             compose.onNodeWithText("step 1 of 3").assertIsDisplayed()
-            compose.onNodeWithText("Snap one problem").assertIsDisplayed()
+            compose.onNodeWithText("Take a photo of one problem").assertIsDisplayed()
 
             compose.onNodeWithText("Next").performClick()
             compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("step 2 of 3") > 0 }
-            compose.onNodeWithText("I check every step").assertIsDisplayed()
+            compose.onNodeWithText("See which steps are right").assertIsDisplayed()
 
             // Skip at the top right of page 2 goes on to the wizard, not to Capture.
             compose.onNodeWithTag("guide_skip_1").performClick()
@@ -59,6 +61,39 @@ class OnboardingFlowTest {
             compose.onNodeWithText("Skip for now").performClick()
             compose.waitUntil(5_000) { onboarded() }
             compose.onNodeWithText("Put one problem inside the box, page flat").assertIsDisplayed()
+        }
+    }
+
+    @Test fun finishing_the_wizard_sets_the_flag_and_a_relaunch_starts_on_capture() {
+        launchWithOnboarding(complete = false).use { scenario ->
+            compose.onNodeWithText("Get started").performClick()
+            compose.onNodeWithText("Next").performClick()
+            compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("step 2 of 3") > 0 }
+            compose.onNodeWithText("Next").performClick()
+            compose.waitUntil(5_000) { compose.onAllNodesWithTextCount("step 3 of 3") > 0 }
+            compose.onNodeWithText("Set up my handwriting").performClick()
+
+            compose.onNodeWithText("Learn my handwriting").assertIsDisplayed()
+            compose.onNodeWithText("Done writing, capture").performClick()
+            // In place of photographing a page: the read comes back with all five lines. Repeated
+            // until the capture screen is listening for it.
+            compose.waitUntil(10_000) {
+                scenario.onActivity { ViewModelProvider(it)[SetupViewModel::class.java].deliverPageReadForTest() }
+                compose.waitForIdle()
+                compose.onAllNodesWithTextCount("Save my handwriting") > 0
+            }
+            compose.onNodeWithText("Save my handwriting").performClick()
+            assertFalse("the flag is set on reaching Capture, not before", onboarded())
+            compose.onNodeWithText("Snap my first problem").performClick()
+            compose.waitUntil(5_000) { onboarded() }
+            compose.onNodeWithText("Put one problem inside the box, page flat").assertIsDisplayed()
+        }
+
+        // Relaunch: straight to Capture, no cover and no guide.
+        ActivityScenario.launch(MainActivity::class.java).use {
+            compose.onNodeWithText("Put one problem inside the box, page flat").assertIsDisplayed()
+            assertEquals(0, compose.onAllNodesWithTextCount("Get started"))
+            assertEquals(0, compose.onAllNodesWithTextCount("step 1 of 3"))
         }
     }
 

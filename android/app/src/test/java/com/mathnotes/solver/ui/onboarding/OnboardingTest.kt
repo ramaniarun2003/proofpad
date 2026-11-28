@@ -43,9 +43,17 @@ class OnboardingTest {
         assertEquals(GuideMove.ToCover, Onboarding.onBack(0))
     }
 
-    @Test fun skip_on_any_page_goes_to_the_wizard_and_is_offered_on_pages_one_and_two() {
+    @Test fun skip_goes_to_the_wizard_and_is_offered_on_pages_one_and_two_only() {
         assertEquals(GuideMove.ToSetup, Onboarding.onSkip())
         assertEquals(listOf(true, true, false), (0 until Onboarding.GUIDE_PAGES).map(Onboarding::showsSkip))
+    }
+
+    @Test fun the_marble_is_the_same_every_time_and_about_half_black_half_white() {
+        val a = Marble.pixels(300, 300, density = 2f)
+        assertTrue(a.contentEquals(Marble.pixels(300, 300, density = 2f)))
+        assertTrue(a.all { it == Marble.BLACK || it == Marble.WHITE })
+        val white = a.count { it == Marble.WHITE }.toFloat() / a.size
+        assertTrue("white share was $white", white in 0.35f..0.60f)
     }
 
     @Test fun there_are_three_pages() {

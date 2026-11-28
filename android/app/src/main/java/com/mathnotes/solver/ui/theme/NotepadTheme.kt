@@ -85,6 +85,11 @@ object NotepadFonts {
         Font(R.font.inter_medium, FontWeight.Medium),
         Font(R.font.inter_semibold, FontWeight.SemiBold),
     )
+
+    /** Inter 700, Latin only: the lettering on the composition-book cover. */
+    val InterBold = FontFamily(
+        Font(R.font.inter_bold, FontWeight.Bold),
+    )
 }
 
 private val NotepadColorScheme = lightColorScheme(

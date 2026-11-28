@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Splash window background (the notebook ink). -->
-    <color name="splash_background">#2A2419</color>
+    <!-- Splash window background: the black of the composition-book cover it opens onto. -->
+    <color name="splash_background">#141414</color>
     <!-- Launcher adaptive-icon background (the sticky-note yellow). -->
     <color name="sticky_yellow">#FFF3A3</color>
 </resources>
