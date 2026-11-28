@@ -275,7 +275,7 @@ private fun timeLabel(ts: Long): String =
 
 /** "problem = answer" (or "problem  <verdict>" for series); problem alone if unsolved. */
 private fun mathLine(s: SessionEntity): String {
-    val problem = s.confirmedLatex.ifEmpty { s.recognizedLatex }
+    val problem = displayProblem(s.confirmedLatex.ifEmpty { s.recognizedLatex })
     if (s.answerLatex.isBlank()) return problem
     return if (s.topic == "series") "$problem \\;\\; \\text{${s.answerLatex}}" else "$problem = ${s.answerLatex}"
 }

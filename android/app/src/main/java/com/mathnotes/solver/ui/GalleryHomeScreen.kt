@@ -298,7 +298,8 @@ private fun StatusGlyph(note: SessionEntity, size: androidx.compose.ui.unit.Dp) 
 
 // --- helpers ---
 
-private fun problemOf(n: SessionEntity): String = n.confirmedLatex.ifEmpty { n.recognizedLatex }
+/** The note's problem as drawn on a card (a slash derivative shown as a fraction). */
+private fun problemOf(n: SessionEntity): String = displayProblem(n.confirmedLatex.ifEmpty { n.recognizedLatex })
 
 private fun difficultyLabel(d: Difficulty?): String = when (d) {
     Difficulty.EASY -> "Easy"; Difficulty.MEDIUM -> "Medium"; Difficulty.HARD -> "Hard"; null -> ""

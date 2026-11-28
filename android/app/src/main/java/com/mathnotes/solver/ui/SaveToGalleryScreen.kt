@@ -149,7 +149,7 @@ fun SaveToGalleryContent(
                         .background(Color.White).border(1.dp, NotepadColors.HeaderBorder).padding(6.dp),
                 ) {
                     Column {
-                        LatexView(problemLatex, textSizePx = with(density) { 12.sp.toPx() })
+                        LatexView(displayProblem(problemLatex), textSizePx = with(density) { 12.sp.toPx() })
                         if (answerLatex.isNotBlank()) LatexView("= $answerLatex", textSizePx = with(density) { 11.sp.toPx() })
                     }
                 }
