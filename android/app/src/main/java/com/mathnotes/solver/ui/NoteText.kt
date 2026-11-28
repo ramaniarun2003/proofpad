@@ -73,8 +73,9 @@ private val SLASH_DERIVATIVE = Regex("""(?<![a-zA-Z\\])d\s*/\s*d\s*([a-zA-Z])(?!
 private val SLASH_PARTIAL = Regex("""\\partial\s*/\s*\\partial\s*([a-zA-Z])(?![a-zA-Z])\s*""")
 
 /**
- * The problem as shown on the Results page: a derivative written with a slash (`d/dx`, as Mathpix
- * reads handwriting) is typeset as a fraction. Display only; the stored LaTeX is not changed.
+ * LaTeX as shown on Review, Results and the PDF: a derivative written with a slash (`d/dx`, as
+ * Mathpix reads handwriting) is typeset as a fraction. Display only; the stored LaTeX, and the
+ * editable field on Review, are not changed.
  */
 fun displayProblem(latex: String): String =
     latex

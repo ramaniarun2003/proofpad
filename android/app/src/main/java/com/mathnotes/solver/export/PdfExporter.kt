@@ -10,6 +10,7 @@ import android.graphics.Rect
 import android.graphics.pdf.PdfDocument
 import androidx.core.content.FileProvider
 import com.mathnotes.solver.ui.SolverUiState
+import com.mathnotes.solver.ui.displayProblem
 import ru.noties.jlatexmath.JLatexMathDrawable
 import java.io.File
 
@@ -50,7 +51,9 @@ object PdfExporter {
             }
         }
         fun text(s: String, p: Paint) { newPageIfNeeded(p.textSize + 6); page.canvas.drawText(s, MARGIN.toFloat(), y + p.textSize, p); y += p.textSize + 6 }
-        fun latex(s: String, size: Float) {
+        fun latex(raw: String, size: Float) {
+            // Same display form as the screens: a slash derivative (d/dx) is drawn as a fraction.
+            val s = displayProblem(raw)
             val d = runCatching { JLatexMathDrawable.builder(s).textSize(size).padding(4).build() }.getOrNull()
             if (d == null) { text(s, body); return }
             val scale = minOf(1f, (PAGE_W - 2 * MARGIN).toFloat() / d.intrinsicWidth)

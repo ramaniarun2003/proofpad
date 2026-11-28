@@ -145,7 +145,7 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
                         NotepadLabel("I read this as", fontSize = 16)
                         // Long-press to compare against the raw Mathpix string (before corrections).
                         RawLatexTooltip(state.rawLatex) {
-                            LatexView(state.latex, Modifier.padding(top = 4.dp), textSizePx = 56f)
+                            LatexView(displayProblem(state.latex), Modifier.padding(top = 4.dp), textSizePx = 56f)
                         }
                     }
                     ConfidencePill(state.confidence, state.lowConfidence)
