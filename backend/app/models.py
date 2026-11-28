@@ -33,6 +33,12 @@ class RecognizeResponse(BaseModel):
     steps: list[str] = []
     segments: list[Segment] = []
     split_uncertain: bool = False    # "=" present but no operator found: the app should ask
+    # What the split was made at: "=", "⇒", "∴", "→", a word ("so", "is", "converges"), or "line"
+    # for a line break. Empty when there are no steps.
+    split_at: str = ""
+    # Set when the problem could not be parsed. The response is still 200, with `steps` empty,
+    # so Review can ask the student to fix the LaTeX.
+    parse_error: Optional[str] = None
 
 
 class PageLine(BaseModel):
@@ -52,6 +58,7 @@ class PageRecognizeResponse(BaseModel):
     steps: list[str] = []
     segments: list[Segment] = []
     split_uncertain: bool = False
+    split_at: str = ""
 
 
 class Step(BaseModel):
@@ -82,7 +89,8 @@ class SolveResponse(BaseModel):
 class VerifyRequest(BaseModel):
     """
     Two shapes. Student chain (Identify → Check): `problem_latex` + `user_steps`, the student's own
-    lines in order. Edited generated chain (older clients): `latex` + `steps`.
+    lines in order. Edited generated chain (older clients): `latex` + `steps`. For a series the
+    student's step is a claim: `CONVERGES` / `DIVERGES` (or any wording Identify accepts).
     """
     session_id: str = ""
     latex: str = ""
@@ -94,7 +102,7 @@ class VerifyRequest(BaseModel):
 
 
 class UserStepCheck(BaseModel):
-    latex: str
+    latex: str                       # a series claim comes back as \text{converges} / \text{diverges}
     status: str                      # "ok" | "wrong" | "unparseable"
     rule: str = ""                   # rule name, "skipped n steps: …", or "unrecognized but correct"
     hint: str = ""                   # common-mistake hint, or what the last step still lacks
@@ -109,6 +117,8 @@ class VerifyResponse(BaseModel):
     steps: list[UserStepCheck] = []
     expected_final: str = ""
     user_final_equals_expected: bool = False
+    # Series only: our convergence tests, shown under the student's claim as the explanation.
+    solution_steps: list[Step] = []
 
 
 class ExportRequest(BaseModel):

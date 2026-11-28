@@ -144,8 +144,11 @@ def test_verify_api_slash_derivative_and_blank_steps():
     assert r["verdict"] == "verified" and len(r["steps"]) == 1
 
 
-def test_verify_api_rejects_series_and_unparseable_problem():
-    assert _post({"problem_latex": r"\sum_{n=1}^{\infty} \frac{1}{n^2}", "user_steps": ["1"]}).status_code == 422
+def test_verify_api_rejects_unparseable_problem_and_asks_for_a_series_claim():
+    # A series step must be a claim; an expression is flagged, not rejected.
+    r = _post({"problem_latex": r"\sum_{n=1}^{\infty} \frac{1}{n^2}", "user_steps": ["1"]})
+    assert r.status_code == 200
+    assert (r.json()["verdict"], r.json()["steps"][0]["status"]) == ("mismatch", "unparseable")
     assert _post({"problem_latex": r"\frac{d}{dx}(", "user_steps": ["1"]}).status_code == 422
 
 

@@ -25,9 +25,19 @@ that hold the problem and the student's working, e.g. `\\frac{d}{dx}\\sin(3x) = 
  "segments": [{"latex": "…", "line": 0, "bbox": [x0, y0, x1, y1]}], "split_uncertain": false}
 ```
 `latex` stays the full recognized string. Lines come from Mathpix `line_data`; each is cut at its
-top-level `=`. The problem is the first segment with an operator we solve (d/dx, ′, ∫, Σ, lim, ∂)
+top-level claim separators: `=`, `\\Rightarrow`, `\\implies`, `\\therefore`, `\\to`, `\\rightarrow`,
+`\\longrightarrow`, and a bare "so" / "is" inside `\\text{}`. The problem is the first segment with an operator we solve (d/dx, ′, ∫, Σ, lim, ∂)
 and every later segment is a step. No operator → `problem_latex` is the whole string, `steps` is
 empty, and `split_uncertain` is true if there were `=` signs. `mode=page` returns the same four fields.
+
+- `split_at`: what the split was made at, for the Review caption: `=`, `⇒`, `∴`, `→`, a word (`so`, `is`,
+  `converges`), or `line` for a line break. Empty when `steps` is empty. Also returned by `mode=page`.
+- **Series**: the problem is only the `\\sum …` part, with `_{n=1}^{\\infty}` added when the bounds are
+  missing (index n, k or i taken from the term, default n). The step is a claim, normalized to the token
+  `CONVERGES` or `DIVERGES`: `\\sum \\frac{1}{n^{2}} \\Rightarrow \\text { converges }` gives
+  `problem_latex: "\\sum_{n=1}^{\\infty} \\frac{1}{n^{2}}"`, `steps: ["CONVERGES"]`, `split_at: "⇒"`.
+- `parse_error`: set when `problem_latex` does not parse. The response is still `200`, with `steps`
+  empty, so Review can ask for a fix. `null` otherwise.
 
 `503` when Mathpix is unreachable (app offers retry / History). With no Mathpix key the backend
 runs in **stub mode** and always returns `STUB_LATEX` with confidence 0.99.
@@ -78,7 +88,12 @@ Response `200`:
   when it is a later state, `unrecognized but correct` otherwise.
 - Step `hint`: sign flipped, chain rule missing, wrong power, off by a constant factor, missing constant of
   integration; for a skipped step, which rules it folded together.
-- The operator written in `problem_latex` decides the topic. Series chains return `422`.
+- The operator written in `problem_latex` decides the topic.
+- **Series**: each step is a claim (`CONVERGES` / `DIVERGES`, or wording such as `\\text{converges}`,
+  `div`, `convergent`) compared with the outcome of our convergence tests. A matching claim is `ok` with the
+  deciding test as `rule`; a wrong one is `wrong` with the hint `our <test name> says it <converges|diverges>`;
+  an expression is `unparseable`. Step `latex` comes back as `\\text{converges}` / `\\text{diverges}`, and
+  `solution_steps` holds our tests (same shape as `/solve` steps) to show as the explanation.
 
 Older shape, still accepted: `latex` + `steps: [...]` (an edited generated chain) returns
 `verified`, `mismatch_at`, `details` and `verdict`.

@@ -18,7 +18,18 @@ data class RecognizeResponse(
     val steps: List<String> = emptyList(),
     val segments: List<Segment> = emptyList(),
     @Json(name = "split_uncertain") val splitUncertain: Boolean = false,
+    // What the split was made at: "=", "⇒", "∴", "→", a word, or "line". Empty when not split.
+    @Json(name = "split_at") val splitAt: String = "",
+    // The problem did not parse: still a 200, with no steps; Review asks for a fix.
+    @Json(name = "parse_error") val parseError: String? = null,
 )
+
+/** A series step is a claim, not an expression: one of these two tokens. */
+object Claim {
+    const val CONVERGES = "CONVERGES"
+    const val DIVERGES = "DIVERGES"
+    fun isClaim(step: String): Boolean = step.trim().let { it == CONVERGES || it == DIVERGES }
+}
 
 /** One piece of the capture after the Identify split: a line, cut at its top-level `=`. */
 @JsonClass(generateAdapter = false)
@@ -128,6 +139,8 @@ data class VerifyResponse(
     val steps: List<UserStepCheck> = emptyList(),
     @Json(name = "expected_final") val expectedFinal: String = "",
     @Json(name = "user_final_equals_expected") val userFinalEqualsExpected: Boolean = false,
+    // Series only: our convergence tests, listed under the student's claim as the explanation.
+    @Json(name = "solution_steps") val solutionSteps: List<Step> = emptyList(),
 )
 
 @JsonClass(generateAdapter = false)

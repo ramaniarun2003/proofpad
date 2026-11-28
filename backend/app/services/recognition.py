@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import httpx
 
 from ..config import settings
+from .identify import normalize_claim
 
 log = logging.getLogger("proofpad.recognition")
 
@@ -111,6 +112,23 @@ def _math_spans(text: str) -> list[str]:
     return [next(g for g in m.groups() if g is not None).strip() for m in _SPAN_RE.finditer(text)]
 
 
+def _spans_with_claims(text: str) -> list[str]:
+    """
+    [_math_spans], keeping a convergence claim written in words after a span. Mathpix reads
+    handwritten `Σ 1/n² ⇒ converges` as `$\\sum \\frac{1}{n^{2}} \\Rightarrow$ converges`: the word is
+    the student's step, so it joins its span as `\\text{converges}`. Any other prose is still dropped.
+    """
+    matches = list(_SPAN_RE.finditer(text))
+    spans = []
+    for m, nxt in zip(matches, matches[1:] + [None]):
+        span = next(g for g in m.groups() if g is not None).strip()
+        prose = text[m.end():nxt.start() if nxt else len(text)].split("\n")[0].strip()
+        if prose and normalize_claim(prose):
+            span = f"{span} \\text{{{prose}}}"
+        spans.append(span)
+    return spans
+
+
 def _strip_row_env(latex: str) -> tuple[str, bool]:
     """If `latex` is wholly one row environment, return (its body, True); else (latex, False)."""
     t = latex.strip()
@@ -166,7 +184,7 @@ def _clean_row(row: str) -> str:
 
 def _rows_of(text: str) -> list[str]:
     """The separate handwritten lines inside one Mathpix entry's text (possibly just one)."""
-    spans = _math_spans(text)
+    spans = _spans_with_claims(text)
     if not spans:
         spans = [text.strip()]
     rows: list[str] = []

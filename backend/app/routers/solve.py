@@ -8,10 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..db import SessionRow, get_db
-from ..models import SolveRequest, SolveResponse, Topic, UserStepCheck, VerifyRequest, VerifyResponse
+from ..models import SolveRequest, SolveResponse, Step, Topic, UserStepCheck, VerifyRequest, VerifyResponse
 from ..services import steps as step_service
 from ..services.symbolic import ParseError, parse
-from ..services.verify import verify, verify_latex_steps, verify_user_steps
+from ..services.verify import verify, verify_latex_steps, verify_series_claim, verify_user_steps
 
 router = APIRouter(tags=["solve"])
 logger = logging.getLogger(__name__)
@@ -66,8 +66,6 @@ def verify_endpoint(req: VerifyRequest, db: Session = Depends(get_db)):
     except ParseError as exc:
         raise HTTPException(422, str(exc))
     topic = parsed.topic if req.topic in (Topic.unknown, None) else req.topic
-    if topic == Topic.series:
-        raise HTTPException(422, "edited series steps cannot be re-verified; re-run /solve")
     row = db.get(SessionRow, req.session_id)
 
     if req.user_steps is not None:
@@ -76,10 +74,17 @@ def verify_endpoint(req: VerifyRequest, db: Session = Depends(get_db)):
             topic = parsed.topic       # the operator written in the problem decides, not the chip
         if topic == Topic.unknown:
             topic = Topic.derivative   # same default as /solve for a bare expression
-        if topic == Topic.series:
-            raise HTTPException(422, "series steps cannot be checked step by step; re-run /solve")
+        user_steps = [s for s in req.user_steps if s.strip()]
+        solution_steps: list[Step] = []
         try:
-            res = verify_user_steps(parsed, topic, [s for s in req.user_steps if s.strip()])
+            if topic == Topic.series:
+                # The step is a claim; our convergence tests come back as the explanation.
+                if parsed.index is None or parsed.limits is None:
+                    raise ValueError("series problems must be written as a \\sum with limits")
+                res, sol = verify_series_claim(parsed, user_steps)
+                solution_steps = [s.to_model(i, sol.format_latex) for i, s in enumerate(sol.steps)]
+            else:
+                res = verify_user_steps(parsed, topic, user_steps)
         except ValueError as exc:
             raise HTTPException(422, str(exc))
         if row is not None:
@@ -93,10 +98,13 @@ def verify_endpoint(req: VerifyRequest, db: Session = Depends(get_db)):
             steps=[UserStepCheck(latex=s.latex, status=s.status, rule=s.rule, hint=s.hint) for s in res.steps],
             expected_final=res.expected_final,
             user_final_equals_expected=res.user_final_equals_expected,
+            solution_steps=solution_steps,
         )
         logger.info("verify response: %s", response.model_dump(mode="json"))
         return response
 
+    if topic == Topic.series:
+        raise HTTPException(422, "edited series steps cannot be re-verified; re-run /solve")
     vr = verify_latex_steps(
         parsed,
         topic,

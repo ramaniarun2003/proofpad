@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.mathnotes.solver.data.api.Claim
 import com.mathnotes.solver.ui.components.NotepadBottomBar
 import com.mathnotes.solver.ui.components.NotepadHeader
 import com.mathnotes.solver.ui.components.NotepadLabel
@@ -153,8 +154,16 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
                     ),
                     minLines = 1,
                 )
-                if (state.splitAtEquals) {
-                    NotepadLabel("I split this at the = sign; drag a step up into the problem if I got it wrong", fontSize = 14)
+                splitCaption(state.splitAt)?.let { NotepadLabel(it, fontSize = 14) }
+                if (state.parseError != null) {
+                    StickyNote(Modifier.fillMaxWidth(0.92f), rotationDeg = -1f) {
+                        Text(
+                            PARSE_ERROR_NOTE,
+                            fontFamily = NotepadFonts.PatrickHand,
+                            fontSize = 15.sp,
+                            color = NotepadColors.NoteInkYellow,
+                        )
+                    }
                 }
                 if (state.splitUncertain) {
                     StickyNote(Modifier.fillMaxWidth(0.92f), rotationDeg = -1f) {
@@ -182,8 +191,17 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
 
                 NotepadLabel("Your step-by-step working:")
                 state.userSteps.forEachIndexed { index, stepText ->
+                    // A series step is a claim, not an expression: a toggle, prefilled from the read.
+                    val isClaim = Claim.isClaim(stepText) || (state.topic == "series" && stepText.isBlank())
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
+                        if (isClaim) {
+                            TopicPill("Converges", selected = stepText.trim() == Claim.CONVERGES, modifier = Modifier.weight(1f)) {
+                                vm.updateUserStep(index, Claim.CONVERGES)
+                            }
+                            TopicPill("Diverges", selected = stepText.trim() == Claim.DIVERGES, modifier = Modifier.weight(1f)) {
+                                vm.updateUserStep(index, Claim.DIVERGES)
+                            }
+                        } else OutlinedTextField(
                             value = stepText,
                             onValueChange = { vm.updateUserStep(index, it) },
                             modifier = Modifier.weight(1f),
@@ -198,7 +216,7 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
                             minLines = 1,
                         )
                         StepOverflowMenu(
-                            onMerge = { vm.mergeStepIntoProblem(index) },
+                            onMerge = if (isClaim) null else ({ vm.mergeStepIntoProblem(index) }),
                             onRemove = { vm.removeUserStep(index) },
                         )
                     }
@@ -261,7 +279,7 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
 
 /** Per-step ⋮ menu: fold the step back into the problem (undo a wrong split) or delete it. */
 @Composable
-private fun StepOverflowMenu(onMerge: () -> Unit, onRemove: () -> Unit) {
+private fun StepOverflowMenu(onMerge: (() -> Unit)?, onRemove: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         Box(
@@ -272,10 +290,12 @@ private fun StepOverflowMenu(onMerge: () -> Unit, onRemove: () -> Unit) {
                 .padding(horizontal = 10.dp, vertical = 12.dp),
         ) { Text("⋮", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = NotepadColors.Ink) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text("Merge into problem", fontFamily = NotepadFonts.Inter) },
-                onClick = { open = false; onMerge() },
-            )
+            if (onMerge != null) {
+                DropdownMenuItem(
+                    text = { Text("Merge into problem", fontFamily = NotepadFonts.Inter) },
+                    onClick = { open = false; onMerge() },
+                )
+            }
             DropdownMenuItem(
                 text = { Text("Remove step", fontFamily = NotepadFonts.Inter) },
                 onClick = { open = false; onRemove() },
