@@ -85,7 +85,9 @@ def parse(latex: str, variable: str = "x") -> Parsed:
     text = _INTEGRAL_SIGN.sub(_expand_integral_sign, text)
     has_multiple_signs = len(_INTEGRAL_SIGN.findall(text)) > 1
     try:
-        expr = parse_derivative_latex(text, strict=has_multiple_signs)
+        # strict: the whole string must be consumed. Without it the parser stops at the first
+        # thing it cannot read and silently returns what came before (`x^2 }` → x²).
+        expr = parse_derivative_latex(text, strict=True)
     except Exception as exc:  # antlr raises a variety of exception types
         raise ParseError(f"could not parse '{text}': {exc}") from exc
     if isinstance(expr, sp.Integral) and len(expr.limits) > 1:

@@ -180,3 +180,26 @@ def test_verifier_catches_a_wrong_step():
 def test_parse_error_on_garbage():
     with pytest.raises(ParseError):
         parse(r"\frac{d}{dx} \int")
+
+
+@pytest.mark.parametrize("latex", [
+    r"\sum_{n=1}^{\infty} \frac{1}{n^{2}}{",          # a stray brace after the expression
+    r"\sum_{n=1}^{\infty} \frac{1}{n^{2}}\frac{}{}",   # an empty fraction appended
+    r"\frac{d}{dx} x^2 )",
+    r"\int 2x dx ]",
+    r"x^2 }",
+    r"2x +",
+])
+def test_trailing_junk_is_a_parse_error(latex):
+    with pytest.raises(ParseError):
+        parse(latex)
+
+
+@pytest.mark.parametrize("latex, expected", [
+    (r"3 \cos (3 x).", "3*cos(3*x)"),     # a sentence-ending mark is not junk
+    (r"x^2 + C ,", "C + x**2"),
+    (r"\frac{d}{d x} \sin (3 x)", "Derivative(sin(3*x), x)"),
+    (r"\int x^{2} d x", "Integral(x**2, x)"),
+])
+def test_strict_parsing_still_accepts_ordinary_input(latex, expected):
+    assert str(parse(latex).expr) == expected

@@ -86,4 +86,7 @@ def normalize(latex: str) -> str:
     # Collapse whitespace and stray equals-signs at the ends.
     s = re.sub(r"\s+", " ", s).strip()
     s = s.strip("= ")
+    # A sentence-ending mark after the expression ("= 3\\cos(3x).") is not part of the math; the
+    # parser is strict about anything left over at the end, so drop it here.
+    s = re.sub(r"(?:\s*[.,;])+$", "", s)
     return s
