@@ -368,7 +368,9 @@ fun CaptureScreen(
         // Status line just below the guide box.
         Text(
             if (busy) (if (pageMode) setupState?.status else state.status)?.ifBlank { "Recognizing…" } ?: "Recognizing…"
-            else "page found · hold still",
+            // Nothing looks at the preview frames yet, so this must not claim a page was found.
+            // Live page detection is a known gap (README, Known issues).
+            else "hold still",
             Modifier
                 .fillMaxWidth()
                 .offset(y = h * (gTop + gHeight) + 10.dp)

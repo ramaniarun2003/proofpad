@@ -110,3 +110,10 @@ Room, so **History** on the phone shows solved problems even if the network drop
 - **M2 Nov 16 (Phase 2 presentation)** — derivatives + integrals end to end, verified, demoed live
 - **M3 Dec 2** — series, per-step mismatch reporting, PDF export, history; feature freeze
 - **Dec 4** slides · **Dec 7** final demo · **Dec 14** final report
+
+## Known issues
+- **No live page detection on the capture screen.** The status line under the guide box says
+  "hold still"; it does not look at the preview frames. Page detection only runs on the photo after
+  the shutter (the opt-in perspective warp in `Preprocessor`). Wiring it to the preview needs a
+  CameraX `ImageAnalysis` use case, per-frame quad detection, and thresholds for "too dark" and
+  "too tilted" tuned on real pages.
