@@ -81,4 +81,11 @@ class SplitCaptionTest {
         )!!
         assertTrue(old.problems.isEmpty())
     }
+
+    @Test fun too_complex_gets_its_own_note_and_server_text_is_never_shown() {
+        assertEquals(TOO_COMPLEX_NOTE, parseNote("""{"detail":"this one is too complex for me"}"""))
+        assertEquals(TOO_COMPLEX_NOTE, parseNote("this one is too complex for me"))
+        assertEquals(PARSE_ERROR_NOTE, parseNote("""{"detail":"could not parse '\\frac{d}{dx}(': Invalid LaTeX"}"""))
+        assertEquals(PARSE_ERROR_NOTE, parseNote(null))
+    }
 }

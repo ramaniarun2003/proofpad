@@ -73,6 +73,24 @@ innermost-to-outermost order. Indefinite integrals also accept `\iint` and `\iii
 with explicit differentials. The solver evaluates one variable per step and returns
 `422` if it cannot evaluate the integral symbolically.
 
+## Limits
+
+Solve, verify and parsing run in worker processes under a deadline (`backend/app/services/sandbox.py`);
+a worker still busy at the deadline is killed and replaced, so no input can hold up `/health`.
+
+| Limit | Default | Setting |
+|---|---|---|
+| `/solve` | 10 s | `SOLVE_TIMEOUT_S` |
+| `/verify` | 10 s | `VERIFY_TIMEOUT_S` |
+| `/recognize` (the Mathpix call) | 20 s, then `503` | `RECOGNIZE_TIMEOUT_S` |
+| parsing a recognized reading | 5 s | `PARSE_TIMEOUT_S` |
+| LaTeX length, per string | 2000 characters | `MAX_LATEX_CHARS` |
+| bracket nesting | 24 deep | `MAX_LATEX_DEPTH` |
+| steps per `/verify` | 40 | `MAX_STEPS` |
+
+Over a limit or past a deadline, `/solve` and `/verify` answer `422 {"detail": "this one is too complex for me"}`.
+`/recognize` still answers `200`, with `parse_error` set to that text.
+
 ## `POST /verify`
 Checks the **student's own chain** (the Identify split of a capture):
 ```json

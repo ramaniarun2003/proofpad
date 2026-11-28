@@ -169,7 +169,7 @@ fun ReviewScreen(vm: SolverViewModel, onSolved: () -> Unit, onRetake: () -> Unit
                 if (state.parseError != null) {
                     StickyNote(Modifier.fillMaxWidth(0.92f), rotationDeg = -1f) {
                         Text(
-                            PARSE_ERROR_NOTE,
+                            parseNote(state.parseError),
                             fontFamily = NotepadFonts.PatrickHand,
                             fontSize = 15.sp,
                             color = NotepadColors.NoteInkYellow,

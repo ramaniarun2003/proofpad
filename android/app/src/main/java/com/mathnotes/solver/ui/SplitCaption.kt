@@ -17,3 +17,11 @@ fun splitCaption(splitAt: String): String? {
 }
 
 const val PARSE_ERROR_NOTE = "I could not parse this, fix the LaTeX and try again"
+const val TOO_COMPLEX_NOTE = "This one is too complex for me. Try a shorter or simpler form."
+
+/**
+ * The yellow note Review shows for a problem the backend could not use. [serverText] is the
+ * backend's `parse_error` or a 422 body; it is only inspected, never shown.
+ */
+fun parseNote(serverText: String?): String =
+    if (serverText?.contains("too complex", ignoreCase = true) == true) TOO_COMPLEX_NOTE else PARSE_ERROR_NOTE

@@ -507,8 +507,9 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     /** Solve / Check failed on Review. A 422 is a parse failure: the yellow note, not the raw error body. */
     private fun SolverUiState.failed(e: Exception): SolverUiState =
         if (e is HttpException && e.code() == 422) {
-            Timber.w("parse failure from the backend: %s", e.response()?.errorBody()?.string()?.take(300))
-            copy(busy = false, status = "", error = null, parseError = PARSE_ERROR_NOTE)
+            val body = e.response()?.errorBody()?.string().orEmpty()
+            Timber.w("parse failure from the backend: %s", body.take(300))
+            copy(busy = false, status = "", error = null, parseError = parseNote(body))
         } else {
             copy(busy = false, status = "", error = describe(e))
         }

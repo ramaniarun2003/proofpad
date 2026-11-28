@@ -20,7 +20,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env            # leave MATHPIX_* empty → stub mode, no network needed
 pytest                          # 31 tests: solver rules, verifier, API round trip
-./run.sh                        # http://0.0.0.0:8000  — interactive docs at /docs
+./run.sh                        # port 8000, two server processes; DEV=1 ./run.sh for --reload
 ```
 
 Try it without the app:
