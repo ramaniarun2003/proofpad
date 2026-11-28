@@ -57,7 +57,7 @@ private fun dotColor(state: BackendState) = when (state) {
 
 /** Header status chip: a colored dot (green/amber-pulsing/red) + "backend". Tap to open the sheet. */
 @Composable
-fun BackendStatusChip(state: BackendState, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun BackendStatusChip(state: BackendState, onClick: () -> Unit, modifier: Modifier = Modifier, onPaper: Boolean = false) {
     val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
         initialValue = 1f, targetValue = 0.35f,
         animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "pulseAlpha",
@@ -67,7 +67,7 @@ fun BackendStatusChip(state: BackendState, onClick: () -> Unit, modifier: Modifi
     Row(
         modifier
             .clip(RoundedCornerShape(999.dp))
-            .background(Color.White.copy(alpha = 0.12f))
+            .background(if (onPaper) NotepadColors.HeaderBand else Color.White.copy(alpha = 0.12f))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -78,7 +78,7 @@ fun BackendStatusChip(state: BackendState, onClick: () -> Unit, modifier: Modifi
         ) {}
         Text(
             "backend",
-            fontFamily = NotepadFonts.PatrickHand, fontSize = 15.sp, color = NotepadColors.Paper,
+            fontFamily = NotepadFonts.PatrickHand, fontSize = 15.sp, color = if (onPaper) NotepadColors.Ink else NotepadColors.Paper,
         )
     }
 }

@@ -19,6 +19,17 @@ fun splitCaption(splitAt: String): String? {
 const val PARSE_ERROR_NOTE = "I could not parse this, fix the LaTeX and try again"
 const val TOO_COMPLEX_NOTE = "This one is too complex for me. Try a shorter or simpler form."
 
+const val CANT_REACH_NOTE = "I can't reach the solver. Check the connection, then try again. Your photo is kept."
+const val SOLVER_TROUBLE_NOTE = "The solver had trouble reading this one. Try again. Your photo is kept."
+const val PHOTO_TOO_LARGE_NOTE = "That photo is too large to send. Retake it a little closer."
+
+/** What Review says when recognition failed; never the exception text or a response body. */
+fun recognizeFailureNote(e: Throwable): String = when {
+    e is java.io.IOException -> CANT_REACH_NOTE
+    e is retrofit2.HttpException && e.code() == 413 -> PHOTO_TOO_LARGE_NOTE
+    else -> SOLVER_TROUBLE_NOTE
+}
+
 /**
  * The yellow note Review shows for a problem the backend could not use. [serverText] is the
  * backend's `parse_error` or a 422 body; it is only inspected, never shown.

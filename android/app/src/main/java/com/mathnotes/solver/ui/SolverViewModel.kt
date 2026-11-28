@@ -64,6 +64,11 @@ data class SolverUiState(
     val topicHint: String = "unknown",
     /** What the capture was split at ("=", "⇒", "line", …); empty when it was not split. */
     val splitAt: String = "",
+    /**
+     * Recognition failed (no connection, or the solver answered with an error): what Review says
+     * in its error note. The photo is kept and [SolverViewModel.retryRecognize] sends it again.
+     */
+    val recognizeError: String? = null,
     /** The problem did not parse (at recognition, or when Solve / Check was tapped): yellow note on Review. */
     val parseError: String? = null,
     /** `=` signs but no operator found: the problem field may hold the student's work too. */
@@ -114,6 +119,8 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
     private val _captureEvents = MutableSharedFlow<CaptureEvent>(extraBufferCapacity = 4)
     val captureEvents = _captureEvents.asSharedFlow()
     private var pending: PendingCapture? = null
+    /** The most recent capture, kept so a failed recognition can be retried from Review. */
+    private var lastCapture: PendingCapture? = null
 
     init {
         // When the backend comes up and a photo is waiting, recognize it automatically.
@@ -269,7 +276,18 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
      * Auto); when set, it overrides the recognizer's guess so Review and Solve use it.
      */
     fun captureAndRecognize(raw: File, crop: CropSpec? = null, topicHint: String = "unknown") {
-        _state.update { it.copy(busy = true, status = "Preprocessing…", error = null, parseError = null, result = null, solutionAnswer = "", solutionBusy = false) }
+        lastCapture = PendingCapture(raw, crop, topicHint)
+        // A new capture starts from a clean page: nothing of the previous problem may sit under
+        // the new photo while this one is being read, or if reading it fails.
+        _state.update {
+            it.copy(
+                busy = true, status = "Preprocessing…", error = null, parseError = null, recognizeError = null,
+                result = null, solutionAnswer = "", solutionBusy = false,
+                imageFile = raw, sessionId = "", latex = "", rawLatex = "", userSteps = emptyList(),
+                problems = emptyList(), problemIndex = 0, splitAt = "", splitUncertain = false,
+                suggestions = emptyList(), confidence = 0.0, lowConfidence = false,
+            )
+        }
         val debug = debugImages
         val threshold = useAdaptiveThreshold
         viewModelScope.launch {
@@ -307,14 +325,11 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             } catch (e: Exception) {
-                if (e is IOException) {
-                    // Connectivity problem → re-locate and open the discovery sheet, not a dead-end error.
-                    _state.update { it.copy(busy = false, status = "", error = null) }
-                    searchBackend()
-                    _captureEvents.tryEmit(CaptureEvent.OpenBackendSheet)
-                } else {
-                    _state.update { it.copy(busy = false, status = "", error = describe(e)) }
-                }
+                // Review is already on screen: say what happened there and offer Retry. The photo
+                // is kept in [lastCapture].
+                Timber.w(e, "recognition failed")
+                if (e is IOException) searchBackend()
+                _state.update { it.copy(busy = false, status = "", error = null, recognizeError = recognizeFailureNote(e)) }
             }
         }
     }
@@ -339,6 +354,13 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
             val suggestions = repo.suggestionsFor(p.problemLatex)
             _state.update { if (it.problemIndex == index && it.latex == p.problemLatex) it.copy(suggestions = suggestions) else it }
         }
+    }
+
+    /** Review's Retry: send the kept photo again. */
+    fun retryRecognize() {
+        val last = lastCapture ?: return
+        if (_state.value.busy) return
+        captureAndRecognize(last.raw, last.crop, last.topicHint)
     }
 
     fun addUserStep() = _state.update { it.copy(userSteps = it.userSteps + "") }

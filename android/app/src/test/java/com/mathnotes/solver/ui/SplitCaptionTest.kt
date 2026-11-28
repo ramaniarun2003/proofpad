@@ -88,4 +88,13 @@ class SplitCaptionTest {
         assertEquals(PARSE_ERROR_NOTE, parseNote("""{"detail":"could not parse '\\frac{d}{dx}(': Invalid LaTeX"}"""))
         assertEquals(PARSE_ERROR_NOTE, parseNote(null))
     }
+
+    @Test fun recognition_failures_become_plain_sentences() {
+        assertEquals(CANT_REACH_NOTE, recognizeFailureNote(java.net.SocketTimeoutException("timeout")))
+        assertEquals(CANT_REACH_NOTE, recognizeFailureNote(java.net.ConnectException("Failed to connect to /10.0.2.2:8000")))
+        assertEquals(SOLVER_TROUBLE_NOTE, recognizeFailureNote(IllegalStateException("Expected BEGIN_OBJECT but was STRING")))
+        listOf(CANT_REACH_NOTE, SOLVER_TROUBLE_NOTE, PHOTO_TOO_LARGE_NOTE).forEach {
+            assertFalse(it.contains("{") || it.contains("Exception") || it.contains("http"))
+        }
+    }
 }
