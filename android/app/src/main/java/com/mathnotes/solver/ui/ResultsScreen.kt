@@ -1,5 +1,6 @@
 package com.mathnotes.solver.ui
 
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -80,11 +81,26 @@ private fun sympyFn(topic: String): String = when (topic) {
  * Stateless so both states can be previewed and screenshotted; [ResultsScreen] binds it to the VM.
  */
 @Composable
-fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery: () -> Unit) {
+fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery: () -> Unit, onFixReading: () -> Unit = {}) {
     val state by vm.state.collectAsState()
     val result = state.result ?: return
     val ctx = LocalContext.current
     val date = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d")) }
+
+    if (result.verdict == Verdict.UNSOLVED) {
+        UnsolvedContent(
+            problemLatex = state.latex,
+            topic = result.topic,
+            dateLabel = date,
+            busy = state.busy,
+            // Never the server's text: a plain sentence for a reading that will not parse, or the mapped error.
+            problem = state.parseError ?: state.error,
+            onSolve = vm::solve,
+            onFixReading = { vm.reviewUnsolved(); onFixReading() },
+            onNewProblem = { vm.reset(); onNewProblem() },
+        )
+        return
+    }
 
     ResultsContent(
         problemLatex = state.latex,
@@ -106,6 +122,78 @@ fun ResultsScreen(vm: SolverViewModel, onNewProblem: () -> Unit, onSaveToGallery
         onSaveToGallery = onSaveToGallery,
         savedTo = state.savedTo,
     )
+}
+
+/**
+ * A capture that was read but never solved or checked. Nothing has been verified, so there is no
+ * stamp, no answer box and no "agrees at every step": only the problem and a way to solve it.
+ */
+@Composable
+fun UnsolvedContent(
+    problemLatex: String,
+    topic: String,
+    dateLabel: String,
+    busy: Boolean,
+    problem: String?,
+    onSolve: () -> Unit,
+    onFixReading: () -> Unit,
+    onNewProblem: () -> Unit,
+) {
+    val density = LocalDensity.current
+    NotepadPage(
+        title = "ProofPad",
+        caption = "$dateLabel · $topic",
+        bottomBar = {
+            OutlinedButton(
+                onClick = onFixReading,
+                enabled = !busy,
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.5.dp, NotepadColors.Ink),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+            ) { Text("Fix the reading", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
+            Button(
+                onClick = onSolve,
+                enabled = !busy && problemLatex.isNotBlank(),
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = NotepadColors.Ink, contentColor = NotepadColors.Paper),
+            ) { Text(if (busy) "Solving…" else "Solve it", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
+        },
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NotepadLabel("Problem", fontSize = 17)
+            NotepadLabel("not solved yet", fontSize = 17)
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            LatexView(displayProblem(problemLatex), textSizePx = with(density) { 26.sp.toPx() }, fillWidth = false)
+        }
+        Spacer(Modifier.height(16.dp))
+        StickyNote(Modifier.fillMaxWidth(0.94f), rotationDeg = -1f) {
+            Text(
+                "Not solved yet. I read this problem but it was never solved or checked.",
+                fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.NoteInkYellow,
+            )
+        }
+        if (problem != null) {
+            Spacer(Modifier.height(12.dp))
+            StickyNote(Modifier.fillMaxWidth(0.94f), background = NotepadColors.StickyPink, rotationDeg = 1f) {
+                Text(problem, fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.NoteInkPink)
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        OutlinedButton(
+            onClick = onNewProblem,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, NotepadColors.ChipBorder),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
+        ) { Text("New problem", fontFamily = NotepadFonts.PatrickHand, fontSize = 18.sp, color = NotepadColors.Ink) }
+    }
 }
 
 @Composable

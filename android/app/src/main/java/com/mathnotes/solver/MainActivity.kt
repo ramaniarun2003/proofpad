@@ -138,7 +138,9 @@ class MainActivity : ComponentActivity() {
                         composable("results") {
                             ResultsScreen(vm,
                                 onNewProblem = { vm.reset(); nav.popBackStack("capture", inclusive = false) },
-                                onSaveToGallery = { nav.navigate("saveToGallery") })
+                                onSaveToGallery = { nav.navigate("saveToGallery") },
+                                // An unsolved note goes back to Review in place of this screen.
+                                onFixReading = { nav.navigate("review") { popUpTo("results") { inclusive = true } } })
                         }
                         composable("saveToGallery") {
                             SaveToGalleryScreen(vm, onDone = { nav.popBackStack("results", inclusive = false) })

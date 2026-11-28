@@ -568,14 +568,24 @@ class SolverViewModel(app: Application) : AndroidViewModel(app) {
                 result = SolveResponse(
                     sessionId = session.sessionId, topic = session.topic, steps = repo.stepsOf(session),
                     answerLatex = session.answerLatex, verified = session.verified ?: false, mismatchAt = session.mismatchAt,
-                    // A note saved from a student-chain check keeps its verdict (incl. "almost").
-                    verdict = if (repo.stepsOf(session).any { it.isStudent }) Verdict.of(session.verified, session.mismatchAt) else "",
+                    verdict = when {
+                        // Read but never solved or checked: nothing has been verified, so say so.
+                        session.verified == null && repo.stepsOf(session).isEmpty() -> Verdict.UNSOLVED
+                        // A note saved from a student-chain check keeps its verdict (incl. "almost").
+                        repo.stepsOf(session).any { it.isStudent } -> Verdict.of(session.verified, session.mismatchAt)
+                        else -> ""
+                    },
                 ),
+                error = null, parseError = null, recognizeError = null, userSteps = emptyList(),
+                problems = emptyList(), splitAt = "", splitUncertain = false, suggestions = emptyList(),
                 solutionAnswer = repo.stepsOf(session).lastOrNull { it.isSolution }?.afterLatex ?: "",
                 solutionBusy = false,
             )
         }
     }
+
+    /** An unsolved note's "Fix the reading": take it back to Review, editable, with nothing solved. */
+    fun reviewUnsolved() = _state.update { it.copy(result = null, error = null, parseError = null, busy = false, status = "") }
 
     /** Set the current note's difficulty (from the Results stars); persists it on the session. */
     fun setDifficulty(difficulty: Difficulty?) {

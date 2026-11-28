@@ -62,19 +62,21 @@ class SolverRepository(context: Context) {
         )
         val resp = api.recognize(part, deviceId.toRequestBody("text/plain".toMediaType()))
         val corrected = correctLatex(resp.latex, resp.confidence)
+        // The per-user corrections apply to the split pieces too, so Review shows them corrected.
+        val problem = correctLatex(resp.problemLatex.ifBlank { resp.latex }, resp.confidence)
         if (persist) {
             dao.upsert(
                 SessionEntity(
                     sessionId = resp.sessionId,
                     imagePath = imageFile.absolutePath,
                     recognizedLatex = corrected,
+                    // The identified problem, so a capture left unsolved can still be solved from My notebook.
+                    confirmedLatex = problem,
                     confidence = resp.confidence,
                     topic = resp.topicGuess,
                 )
             )
         }
-        // The per-user corrections apply to the split pieces too, so Review shows them corrected.
-        val problem = correctLatex(resp.problemLatex.ifBlank { resp.latex }, resp.confidence)
         val steps = resp.steps.map { if (Claim.isClaim(it)) it else correctLatex(it, resp.confidence) }
         Timber.i("recognize split: problem=%s | steps=%s | at=%s | uncertain=%s | parse_error=%s",
             problem, steps, resp.splitAt, resp.splitUncertain, resp.parseError)
