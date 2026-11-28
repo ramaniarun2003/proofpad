@@ -82,6 +82,12 @@ interface SessionDao {
 
     @Query("SELECT imagePath FROM sessions WHERE imagePath IS NOT NULL")
     suspend fun imagePaths(): List<String>
+
+    @Query("DELETE FROM sessions")
+    suspend fun deleteAll()
+
+    @Query("SELECT COUNT(*) FROM sessions")
+    suspend fun count(): Int
 }
 
 /** v1 → v2: add the folders table and the gallery columns on sessions (no data loss). */

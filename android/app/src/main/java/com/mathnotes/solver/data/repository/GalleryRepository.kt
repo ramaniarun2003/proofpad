@@ -49,6 +49,15 @@ class GalleryRepository(context: Context) {
 
     suspend fun restoreNote(note: SessionEntity) = sessions.upsert(note)
 
+    /** How many notes and folders are on this phone. */
+    suspend fun counts(): Pair<Int, Int> = sessions.count() to dao.folderCount()
+
+    /** Delete every note and every folder. Their files are the caller's to remove afterwards. */
+    suspend fun deleteEverything() {
+        sessions.deleteAll()
+        dao.deleteAllFolders()
+    }
+
     /** Every photo a note points at: the files a storage clean-up must leave alone. */
     suspend fun noteImagePaths(): Set<String> = sessions.imagePaths().toSet()
 

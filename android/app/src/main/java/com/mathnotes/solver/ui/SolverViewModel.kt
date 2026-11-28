@@ -708,6 +708,34 @@ class SolverViewModel(app: Application, private val saved: SavedStateHandle) : A
         report
     }
 
+    /** Settings: (notes, folders, handwriting samples) on this phone. */
+    fun dataCounts(onResult: (Triple<Int, Int, Int>) -> Unit) = viewModelScope.launch {
+        val (notes, folders) = galleryRepo.counts()
+        onResult(Triple(notes, folders, handwritingSamples.value.size))
+    }
+
+    /**
+     * Settings "Clear all data": every note, folder and handwriting sample, and every photo,
+     * thumbnail and exported PDF the app wrote. The solver address and the other settings stay.
+     * There is no undo.
+     */
+    fun clearAllData(onDone: () -> Unit) = viewModelScope.launch {
+        galleryRepo.deleteEverything()
+        handwritingRepo.clear()
+        pending = null
+        lastCapture = null
+        lastCaptureSession = null
+        pendingGalleryFile = null
+        _folderFilter.value = FolderFilter()
+        _galleryQuery.value = ""
+        _state.value = SolverUiState()
+        // With nothing left in the database, nothing is referenced: every file goes.
+        val report = cleanStorage(everything = true)
+        Timber.i("clear all data: %d files, %.1f MB", report.files, report.megabytes)
+        notify(UiMessage("Everything was deleted"))
+        onDone()
+    }
+
     /** Settings: how much the app's photos take up, in megabytes. */
     fun storageUsage(onResult: (Double) -> Unit) = viewModelScope.launch {
         val app = getApplication<Application>()

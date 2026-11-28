@@ -43,4 +43,10 @@ class NoteTextTest {
         assertEquals("""\sum_{n=1}^{\infty} \frac{1}{n^{2}}""", displayProblem("""\sum_{n=1}^{\infty} \frac{1}{n^{2}}"""))
         assertEquals("a d / b", displayProblem("a d / b"))
     }
+
+    @Test fun data_summary_counts_in_plain_words() {
+        assertEquals("3 notes, 1 folder and 5 handwriting samples.", dataSummary(3, 1, 5))
+        assertEquals("1 note, 0 folders and 1 handwriting sample.", dataSummary(1, 0, 1))
+        assertEquals("0 notes, 0 folders and 0 handwriting samples.", dataSummary(0, 0, 0))
+    }
 }

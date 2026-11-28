@@ -1,5 +1,7 @@
 package com.mathnotes.solver.ui
 
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import com.mathnotes.solver.ui.components.NotePressMenu
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -441,8 +443,57 @@ fun SettingsScreen(vm: SolverViewModel, onDone: () -> Unit, onRedoSetup: () -> U
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Ink),
             ) { Text(freedMsg ?: "Free up space now", fontFamily = NotepadFonts.Inter, fontSize = 14.sp) }
+
+            // Everything on this phone, and the one way to remove all of it.
+            SectionHeader("Your data")
+            var counts by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
+            var confirmClear by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { vm.dataCounts { counts = it } }
+            Text(
+                counts?.let { (notes, folders, samples) -> dataSummary(notes, folders, samples) } ?: "Counting…",
+                fontFamily = NotepadFonts.Inter, fontSize = 14.sp, color = NotepadColors.Muted,
+            )
+            OutlinedButton(
+                onClick = { confirmClear = true },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                enabled = counts?.let { it.first + it.second + it.third > 0 } ?: false,
+                border = BorderStroke(1.5.dp, NotepadColors.Red),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = NotepadColors.Red, disabledContentColor = NotepadColors.Held),
+            ) { Text("Clear all data", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
+            if (confirmClear) {
+                val (notes, folders, samples) = counts ?: Triple(0, 0, 0)
+                AlertDialog(
+                    onDismissRequest = { confirmClear = false },
+                    containerColor = NotepadColors.Paper,
+                    title = { Text("Delete everything?", fontFamily = NotepadFonts.PatrickHand, fontSize = 24.sp, color = NotepadColors.Ink) },
+                    text = {
+                        Text(
+                            "This deletes ${dataSummary(notes, folders, samples).removeSuffix(".")} from this phone, with every photo and exported PDF. It cannot be undone. Your settings stay.",
+                            fontFamily = NotepadFonts.PatrickHand, fontSize = 17.sp, color = NotepadColors.Muted,
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            confirmClear = false
+                            vm.clearAllData {
+                                vm.dataCounts { counts = it }
+                                vm.storageUsage { usageMb = it }
+                            }
+                        }) { Text("Delete everything", fontFamily = NotepadFonts.Inter, fontWeight = FontWeight.SemiBold, color = NotepadColors.Red) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { confirmClear = false }) { Text("Cancel", fontFamily = NotepadFonts.Inter, color = NotepadColors.Ink) }
+                    },
+                )
+            }
         }
     }
+}
+
+/** "3 notes, 1 folder and 5 handwriting samples." for Settings and its confirm dialog. */
+fun dataSummary(notes: Int, folders: Int, samples: Int): String {
+    fun n(count: Int, one: String, many: String) = "$count ${if (count == 1) one else many}"
+    return "${n(notes, "note", "notes")}, ${n(folders, "folder", "folders")} and ${n(samples, "handwriting sample", "handwriting samples")}."
 }
 
 /** Connection status line for the backend, with a re-scan button. */

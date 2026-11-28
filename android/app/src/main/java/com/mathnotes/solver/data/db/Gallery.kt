@@ -99,6 +99,12 @@ interface GalleryDao {
     @Query("SELECT * FROM folders WHERE id = :id")
     suspend fun getFolder(id: Long): FolderEntity?
 
+    @Query("DELETE FROM folders")
+    suspend fun deleteAllFolders()
+
+    @Query("SELECT COUNT(*) FROM folders")
+    suspend fun folderCount(): Int
+
     @Query("SELECT sessionId FROM sessions WHERE folderId = :id")
     suspend fun noteIdsInFolder(id: Long): List<String>
 
